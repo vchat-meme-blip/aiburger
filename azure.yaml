@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: mcp-agent-langchainjs
+metadata:
+  template: mcp-agent-langchainjs@1.0.0
+
+services:
+  burger-api:
+    project: ./packages/burger-api
+    language: ts
+    host: function
+
+  burger-mcp:
+    project: ./packages/burger-mcp
+    language: ts
+    host: function
+
+  burger-webapp:
+    project: ./packages/burger-webapp
+    dist: dist
+    language: ts
+    host: staticwebapp
+    # Needed to get the BURGER_API_URL env var set
+    hooks:
+      predeploy:
+        windows:
+          shell: pwsh
+          run: npm run build
+        posix:
+          shell: sh
+          run: npm run build
+
+  agent-api:
+    project: ./packages/agent-api
+    language: ts
+    host: function
+
+  agent-webapp:
+    project: ./packages/agent-webapp
+    dist: dist
+    language: ts
+    host: staticwebapp
+    config:
+      appSettings:
+        AGENT_API_URL: $AGENT_API_URL
+      auth:
+        provider: aad
+        type: anonymous
+    hooks:
+      predeploy:
+        windows:
+          shell: pwsh
+          run: npm run build
+        posix:
+          shell: sh
+          run: npm run build
+
+hooks:
+  postprovision:
+    windows:
+      shell: pwsh
+      run: azd env get-values > .env
+    posix:
+      shell: sh
+      run: azd env get-values > .env
+  postup:
+    windows:
+      shell: pwsh
+      run: npm run -s env
+    posix:
+      shell: sh
+      run: npm run -s env
