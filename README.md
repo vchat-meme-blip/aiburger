@@ -33,7 +33,9 @@ The system is hosted on [Azure Static Web Apps](https://learn.microsoft.com/azur
 
 ### Key features
 
-- LangChain.js agent with tool calling via MCP (Streamable HTTP transport)
+- LangChain.js agent with OpenAI Responses API for enhanced agentic capabilities
+- Unified OpenAI schema supporting both Azure OpenAI and OpenAI models
+- Tool calling via MCP (Streamable HTTP transport)
 - Multi-service, end‑to‑end architecture (web UIs, APIs, MCP server)
 - User authentication with sessions history
 - 100% serverless architecture, for cost-effective scaling
@@ -41,7 +43,7 @@ The system is hosted on [Azure Static Web Apps](https://learn.microsoft.com/azur
 
 ## Architecture
 
-Building AI applications can be complex and time-consuming, but using LangChain.js and Azure serverless technologies allows to greatly simplify the process. This application is a AI agent that can be access through different interfaces (web app, CLI) and that can call tools through MCP to interact with a burger ordering API.
+Building AI applications can be complex and time-consuming, but using LangChain.js with the unified OpenAI schema and Azure serverless technologies allows to greatly simplify the process while providing access to the latest agentic features. This application is a AI agent that can be access through different interfaces (web app, CLI) and that can call tools through MCP to interact with a burger ordering API.
 
 ![Architecture diagram](docs/images/architecture.drawio.png?raw=true)
 
@@ -50,7 +52,7 @@ The application is made from these main components:
 | Component         | Folder                                               | Purpose                                      |
 | ----------------- | ---------------------------------------------------- | -------------------------------------------- |
 | Agent Web App     | [`packages/agent-webapp`](./packages/agent-webapp)   | Chat interface + conversation rendering      |
-| Agent API         | [`packages/agent-api`](./packages/agent-api)         | LangChain.js agent + chat state + MCP client |
+| Agent API         | [`packages/agent-api`](./packages/agent-api)         | LangChain.js agent with OpenAI Responses API + chat state + MCP client |
 | Burger API        | [`packages/burger-api`](./packages/burger-api)       | Core burger & order management web API       |
 | Burger MCP Server | [`packages/burger-mcp`](./packages/burger-mcp)       | Exposes burger API as MCP tools              |
 | Burger Web App    | [`packages/burger-webapp`](./packages/burger-webapp) | Live orders visualization                    |
@@ -60,8 +62,15 @@ Additionally, these support components are included:
 
 | Component       | Folder                                           | Purpose                                                  |
 | --------------- | ------------------------------------------------ | -------------------------------------------------------- |
-| Agent CLI       | [`packages/agent-cli`](./packages/agent-cli)     | Command-line interface LangChain.js agent and MCP client |
+| Agent CLI       | [`packages/agent-cli`](./packages/agent-cli)     | Command-line interface LangChain.js agent with OpenAI Responses API and MCP client |
 | Data generation | [`packages/burger-data`](./packages/burger-data) | Scripts to (re)generate burgers data & images            |
+
+## Technology Stack
+
+- **AI Framework**: LangChain.js with OpenAI Responses API (`@langchain/openai`)
+- **LLM Integration**: Unified OpenAI schema supporting Azure OpenAI with managed identity
+- **Agent Capabilities**: Built-in tools, structured outputs, conversation state management
+- **Authentication**: Azure Managed Identity with custom token providers
 
 ## Getting started
 

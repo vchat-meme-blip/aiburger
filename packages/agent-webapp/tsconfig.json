@@ -20,7 +20,8 @@
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitOverride": false,
+    "noImplicitOverride": true,
+    "emitDeclarationOnly": true,
     "useDefineForClassFields": false,
     "plugins": [
       {

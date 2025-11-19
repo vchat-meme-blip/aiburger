@@ -10,10 +10,9 @@ export default defineConfig({
     outDir: './dist',
     emptyOutDir: true,
     sourcemap: true,
-    target: 'esnext',
     rollupOptions: {
       output: {
-        manualChunks(id: string) {
+        manualChunks(id) {
           if (id.includes('node_modules')) {
             return 'vendor';
           }

@@ -1,0 +1,128 @@
+{
+  "name": "mcp-agent-langchainjs",
+  "description": "Serverless AI agent using LangChain.js and Model Context Protocol (MCP) integration to order burgers from a burger restaurant.",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "run-on-output -n 'ready' -p 'burger.*lock lease,agent.*lock lease' concurrently \"npm:start:*\" --kill-others",
+    "start:burger": "npm run start --workspace=burger-webapp",
+    "start:mcp": "npm run start --workspace=burger-mcp -- --local",
+    "start:agent": "npm run start --workspace=agent-webapp",
+    "ready": "echo '\n🚀 All services ready 🚀\n\n- Agent webapp  : http://localhost:4280\n- Burger webapp : http://localhost:5173\n- Burger MCP    : http://localhost:3000/mcp\n'",
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "env": "node env.js",
+    "lint": "xo",
+    "lint:fix": "xo --fix",
+    "format": "prettier --list-different --write ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Azure-Samples/mcp-agent-langchainjs.git"
+  },
+  "homepage": "https://github.com/Azure-Samples/mcp-agent-langchainjs",
+  "bugs": {
+    "url": "https://github.com/Azure-Samples/mcp-agent-langchainjs/issues"
+  },
+  "keywords": [
+    "langchainjs",
+    "agent",
+    "assistant",
+    "serverless",
+    "typescript",
+    "azure",
+    "azure-functions",
+    "azure-static-web-apps",
+    "hamburger",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "Microsoft",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "concurrently": "^9",
+    "dotenv": "^17.2.2",
+    "prettier": "^3",
+    "rimraf": "^6",
+    "run-on-output": "^1.0.1",
+    "typescript": "^5",
+    "xo": "^1.2.3"
+  },
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "xo": [
+    {
+      "ignores": [
+        "**/*.genai.mjs",
+        "**/vite.config.ts"
+      ]
+    },
+    {
+      "space": true,
+      "semicolon": true,
+      "prettier": true,
+      "rules": {
+        "@typescript-eslint/triple-slash-reference": "off",
+        "@typescript-eslint/naming-convention": "off",
+        "@typescript-eslint/consistent-type-definitions": "off",
+        "@typescript-eslint/member-ordering": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/prefer-nullish-coalescing": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/consistent-type-imports": "off",
+        "@typescript-eslint/no-empty-function": "off",
+        "@typescript-eslint/no-floating-promises": "off",
+        "@typescript-eslint/ban-types": "off",
+        "@typescript-eslint/no-restricted-types": "off",
+        "@typescript-eslint/switch-exhaustiveness-check": "off",
+        "@typescript-eslint/no-unsafe-call": "off",
+        "@typescript-eslint/no-dynamic-delete": "off",
+        "@typescript-eslint/dot-notation": "off",
+        "@typescript-eslint/no-base-to-string": "off",
+        "@typescript-eslint/restrict-template-expressions": "off",
+        "import-x/no-unassigned-import": "off",
+        "import/extensions": "off",
+        "n/prefer-global/process": "off",
+        "no-new-func": "off",
+        "capitalized-comments": "off",
+        "unicorn/no-process-exit": "off",
+        "unicorn/prefer-add-event-listener": "off",
+        "unicorn/prefer-switch": "off",
+        "unicorn/prefer-global-this": "off",
+        "unicorn/prefer-module": "off",
+        "unicorn/no-new-array": "off",
+        "unicorn/no-array-callback-reference": "off",
+        "unicorn/prevent-abbreviations": [
+          "error",
+          {
+            "allowList": {
+              "combineDocsChain": true,
+              "env": true,
+              "Db": true,
+              "db": true,
+              "auth": true,
+              "args": true,
+              "Args": true,
+              "arg": true,
+              "i": true
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "prettier": {
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true,
+    "printWidth": 120,
+    "bracketSpacing": true
+  }
+}

@@ -1,0 +1,68 @@
+import process from 'node:process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
+import yaml from 'js-yaml';
+
+app.http('openapi-get', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'openapi',
+  async handler(request: HttpRequest, context: InvocationContext) {
+    context.log('Processing request to get OpenAPI specification...');
+
+    try {
+      const openapiPath = path.join(process.cwd(), 'openapi.yaml');
+      const openapiContent = await fs.readFile(openapiPath, 'utf8');
+
+      const requestUrl = new URL(request.url);
+      const defaultPort = requestUrl.protocol === 'https:' ? '443' : '80';
+      const portSegment = requestUrl.port && requestUrl.port !== defaultPort ? `:${requestUrl.port}` : '';
+      const burgerApiHost = `${requestUrl.protocol}//${requestUrl.hostname}${portSegment}`;
+      console.log('Burger API host:', burgerApiHost);
+
+      // Replace BURGER_API_HOST placeholder with actual host URL
+      context.log('Replacing <BURGER_API_HOST> in OpenAPI specification...');
+      const processedContent = openapiContent.replace('<BURGER_API_HOST>', burgerApiHost);
+
+      const url = new URL(request.url);
+      const wantsJson =
+        url.searchParams.get('format')?.toLowerCase() === 'json' ||
+        (request.headers.get('accept')?.toLowerCase().includes('json') ?? false);
+
+      if (wantsJson) {
+        try {
+          const json = yaml.load(processedContent);
+          return {
+            jsonBody: json,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            status: 200,
+          };
+        } catch (error) {
+          context.error('YAML to JSON conversion failed:', error);
+          return {
+            jsonBody: { error: 'YAML to JSON conversion failed.' },
+            status: 500,
+          };
+        }
+      }
+
+      return {
+        body: processedContent,
+        headers: {
+          'Content-Type': 'text/yaml',
+        },
+        status: 200,
+      };
+    } catch (error) {
+      context.error('Error reading OpenAPI specification file:', error);
+
+      return {
+        jsonBody: { error: 'Error reading OpenAPI specification' },
+        status: 500,
+      };
+    }
+  },
+});
