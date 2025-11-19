@@ -1,2 +1,0 @@
-Build timestamp: 2025-11-19T13:15:00Z
-Deployed with fix for MIME type errors
