@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/message-parser.ts","./src/models.ts","./src/vite-env.d.ts","./src/components/auth.ts","./src/components/chat.ts","./src/components/debug.ts","./src/components/history.ts","./src/components/user-card.ts","./src/services/api.service.ts","./src/services/auth.service.ts","./src/services/user.service.ts"],"version":"5.9.3"}

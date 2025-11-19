@@ -1,0 +1,38 @@
+{
+  "name": "agent-webapp",
+  "version": "1.0.0",
+  "description": "Contoso Burgers AI Agent web application",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "swa start",
+    "start:mock": "swa start mock",
+    "swa:start": "concurrently npm:serve:api npm:serve:webapp --kill-others",
+    "swa:startmock": "concurrently npm:serve:mocks npm:serve:webapp --kill-others",
+    "serve:mocks": "smoke -p 7072 -h 127.0.0.1 mocks",
+    "serve:api": "cd ../agent-api && npm run start",
+    "serve:webapp": "npm run dev -s",
+    "dev": "vite --port 5174 --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "npx rimraf dist"
+  },
+  "author": "Microsoft",
+  "license": "MIT",
+  "dependencies": {
+    "dompurify": "^3.0.0",
+    "lit": "^3.0.0",
+    "marked": "^16.2.1"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.0",
+    "@types/node": "^22.18.12",
+    "postcss-nesting": "^13.0.2",
+    "smoke": "^4.1.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
