@@ -13,7 +13,7 @@
     "serve:api": "cd ../agent-api && npm run start",
     "serve:webapp": "npm run dev -s",
     "dev": "vite --port 5174 --host",
-    "build": "tsc && vite build",
+    "build": "npx rimraf staticwebapp.config.json swa-cli.config.json && tsc && vite build",
     "preview": "vite preview",
     "clean": "npx rimraf dist"
   },
