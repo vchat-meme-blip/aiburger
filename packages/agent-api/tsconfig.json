@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "Node16",
+    "module": "CommonJS",
     "target": "ESNext",
     "incremental": true,
     "composite": true,
@@ -14,7 +14,7 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noImplicitOverride": true,
-    "moduleResolution": "Node16",
+    "moduleResolution": "node",
     "esModuleInterop": true,
     "lib": ["ESNext"]
   },
