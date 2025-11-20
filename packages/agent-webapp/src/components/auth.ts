@@ -3,7 +3,8 @@ import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { getUserInfo, type AuthDetails } from '../services/auth.service.js';
+import { getUserInfo } from '../services/auth.service.js';
+import type { AuthDetails } from '../services/auth.service.js';
 import personSvg from '../../assets/icons/person.svg?raw';
 import logoutSvg from '../../assets/icons/logout.svg?raw';
 import microsoftSvg from '../../assets/providers/microsoft.svg?inline';
@@ -201,7 +202,7 @@ export class AuthComponent extends LitElement {
       --bg: var(--azc-bg, #eee);
       --space-md: var(--azc-space-md, 12px);
       --space-xl: var(--azc-space-xl, calc(var(--space-md) * 2));
-      --space-xs: var(--azc-space-xs, calc(var(--space-md) / 2));
+      --space-xxs: var(--azc-space-xs, calc(var(--space-md) / 2));
       --space-xxs: var(--azc-space-xs, calc(var(--space-md) / 4));
       --border-radius: var(--azc-border-radius, 16px);
       --focus-outline: var(--azc-focus-outline, 2px solid);

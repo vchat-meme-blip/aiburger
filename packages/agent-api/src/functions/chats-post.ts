@@ -43,6 +43,8 @@ const titleSystemPrompt = `Create a title for this chat session, based on the us
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
+  const openAiApiKey = process.env.OPENAI_API_KEY;
+  const openAiBaseUrl = process.env.OPENAI_API_BASE_URL;
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
 
   try {
@@ -71,8 +73,8 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
     context.log(`userId: ${userId}, sessionId: ${sessionId}`);
 
-    if (!azureOpenAiEndpoint || !burgerMcpUrl) {
-      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT or BURGER_MCP_URL';
+    if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
+      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY) or BURGER_MCP_URL';
       context.error(errorMessage);
       return {
         status: 500,
@@ -82,21 +84,35 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       };
     }
 
-    const model = new ChatOpenAI({
-      configuration: {
-        baseURL: azureOpenAiEndpoint,
-        async fetch(url, init = {}) {
-          const token = await getAzureOpenAiTokenProvider()();
-          const headers = new Headers((init as RequestInit).headers);
-          headers.set('Authorization', `Bearer ${token}`);
-          return fetch(url, { ...init, headers });
+    let model: ChatOpenAI;
+
+    if (openAiApiKey) {
+      // Standard OpenAI or compatible endpoint
+      model = new ChatOpenAI({
+        apiKey: openAiApiKey,
+        configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
+        modelName: process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o',
+        streaming: true,
+      });
+    } else {
+      // Azure OpenAI with Managed Identity
+      model = new ChatOpenAI({
+        configuration: {
+          baseURL: azureOpenAiEndpoint,
+          async fetch(url, init = {}) {
+            const token = await getAzureOpenAiTokenProvider()();
+            const headers = new Headers((init as RequestInit).headers);
+            headers.set('Authorization', `Bearer ${token}`);
+            return fetch(url, { ...init, headers });
+          },
         },
-      },
-      modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
-      streaming: true,
-      useResponsesApi: true,
-      apiKey: 'not_used',
-    });
+        modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
+        streaming: true,
+        useResponsesApi: true,
+        apiKey: 'not_used',
+      });
+    }
+
     const chatHistory = new AzureCosmsosDBNoSQLChatMessageHistory({
       sessionId,
       userId,

@@ -124,14 +124,16 @@ function convertHistoryToMessages(history: SessionData['history']): BaseMessage[
 export async function run() {
   const { question, userId, isNew, verbose, local } = parseArgs();
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
+  const openAiApiKey = process.env.OPENAI_API_KEY;
+  const openAiBaseUrl = process.env.OPENAI_API_BASE_URL;
   const localMcpEndpoint = 'http://localhost:3000/mcp';
   const burgerMcpEndpoint = local ? localMcpEndpoint : (process.env.BURGER_MCP_URL ?? localMcpEndpoint);
 
   let client: Client | undefined;
 
   try {
-    if (!azureOpenAiEndpoint || !burgerMcpEndpoint) {
-      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT or BURGER_MCP_URL';
+    if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpEndpoint) {
+      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY) or BURGER_MCP_URL';
       console.error(errorMessage);
       process.exitCode = 1;
       return;
@@ -147,25 +149,36 @@ export async function run() {
       }
     }
 
-    const getToken = getBearerTokenProvider(
-      new DefaultAzureCredential(),
-      'https://cognitiveservices.azure.com/.default',
-    );
-    const model = new ChatOpenAI({
-      configuration: {
-        baseURL: azureOpenAiEndpoint,
-        async fetch(url, init = {}) {
-          const token = await getToken();
-          const headers = new Headers((init as RequestInit).headers);
-          headers.set('Authorization', `Bearer ${token}`);
-          return fetch(url, { ...init, headers });
+    let model: ChatOpenAI;
+
+    if (openAiApiKey) {
+      model = new ChatOpenAI({
+        apiKey: openAiApiKey,
+        configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
+        modelName: process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o',
+        streaming: true,
+      });
+    } else {
+      const getToken = getBearerTokenProvider(
+        new DefaultAzureCredential(),
+        'https://cognitiveservices.azure.com/.default',
+      );
+      model = new ChatOpenAI({
+        configuration: {
+          baseURL: azureOpenAiEndpoint,
+          async fetch(url, init = {}) {
+            const token = await getToken();
+            const headers = new Headers((init as RequestInit).headers);
+            headers.set('Authorization', `Bearer ${token}`);
+            return fetch(url, { ...init, headers });
+          },
         },
-      },
-      modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
-      streaming: true,
-      useResponsesApi: true,
-      apiKey: 'not_used',
-    });
+        modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
+        streaming: true,
+        useResponsesApi: true,
+        apiKey: 'not_used',
+      });
+    }
 
     client = new Client({
       name: 'burger-mcp',
