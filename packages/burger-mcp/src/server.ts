@@ -8,10 +8,10 @@ import { burgerApiUrl } from './config.js';
 import { getMcpServer } from './mcp.js';
 
 const app = express();
-app.use(express.json());
+app.use(express.json() as any);
 
 app.get('/', (_request: Request, response: Response) => {
-  response.send({ status: 'up', message: `Burger MCP server running (Using burger API URL: ${burgerApiUrl})` });
+  (response as any).send({ status: 'up', message: `Burger MCP server running (Using burger API URL: ${burgerApiUrl})` });
 });
 
 // Store transports by session ID
@@ -23,11 +23,11 @@ const transports: Record<string, StreamableHTTPServerTransport | SSEServerTransp
 
 // Handle all MCP Streamable HTTP requests (GET, POST, DELETE) on a single endpoint
 app.all('/mcp', async (request: Request, response: Response) => {
-  console.log(`Received ${request.method} request to /mcp`);
+  console.log(`Received ${(request as any).method} request to /mcp`);
 
   try {
     // Check for existing session ID
-    const sessionId = request.headers['mcp-session-id'] as string | undefined;
+    const sessionId = (request as any).headers['mcp-session-id'] as string | undefined;
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports[sessionId]) {
@@ -38,7 +38,7 @@ app.all('/mcp', async (request: Request, response: Response) => {
         transport = existingTransport;
       } else {
         // Transport exists but is not a StreamableHTTPServerTransport (could be SSEServerTransport)
-        response.status(400).json({
+        (response as any).status(400).json({
           jsonrpc: '2.0',
           error: {
             code: -32_000,
@@ -48,7 +48,7 @@ app.all('/mcp', async (request: Request, response: Response) => {
         });
         return;
       }
-    } else if (!sessionId && request.method === 'POST' && isInitializeRequest(request.body)) {
+    } else if (!sessionId && (request as any).method === 'POST' && isInitializeRequest((request as any).body)) {
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized(sessionId) {
@@ -72,7 +72,7 @@ app.all('/mcp', async (request: Request, response: Response) => {
       await server.connect(transport);
     } else {
       // Invalid request - no session ID or not initialization request
-      response.status(400).json({
+      (response as any).status(400).json({
         jsonrpc: '2.0',
         error: {
           code: -32_000,
@@ -84,11 +84,11 @@ app.all('/mcp', async (request: Request, response: Response) => {
     }
 
     // Handle the request with the transport
-    await transport.handleRequest(request, response, request.body);
+    await transport.handleRequest(request as any, response as any, (request as any).body);
   } catch (error) {
     console.error('Error handling MCP request:', error);
-    if (!response.headersSent) {
-      response.status(500).json({
+    if (!(response as any).headersSent) {
+      (response as any).status(500).json({
         jsonrpc: '2.0',
         error: {
           code: -32_603,
@@ -106,9 +106,9 @@ app.all('/mcp', async (request: Request, response: Response) => {
 
 app.get('/sse', async (request: Request, response: Response) => {
   console.log('Received GET request to /sse (deprecated SSE transport)');
-  const transport = new SSEServerTransport('/messages', response);
+  const transport = new SSEServerTransport('/messages', response as any);
   transports[transport.sessionId] = transport;
-  response.on('close', () => {
+  (response as any).on('close', () => {
     delete transports[transport.sessionId];
   });
   const server = getMcpServer();
@@ -116,7 +116,7 @@ app.get('/sse', async (request: Request, response: Response) => {
 });
 
 app.post('/messages', async (request: Request, response: Response) => {
-  const sessionId = request.query.sessionId as string;
+  const sessionId = (request as any).query.sessionId as string;
   let transport: SSEServerTransport;
   const existingTransport = transports[sessionId];
   if (existingTransport instanceof SSEServerTransport) {
@@ -124,7 +124,7 @@ app.post('/messages', async (request: Request, response: Response) => {
     transport = existingTransport;
   } else {
     // Transport exists but is not a SSEServerTransport (could be StreamableHTTPServerTransport)
-    response.status(400).json({
+    (response as any).status(400).json({
       jsonrpc: '2.0',
       error: {
         code: -32_000,
@@ -136,9 +136,9 @@ app.post('/messages', async (request: Request, response: Response) => {
   }
 
   if (transport) {
-    await transport.handlePostMessage(request, response, request.body);
+    await transport.handlePostMessage(request as any, response as any, (request as any).body);
   } else {
-    response.status(400).send('No transport found for sessionId');
+    (response as any).status(400).send('No transport found for sessionId');
   }
 });
 
@@ -154,7 +154,7 @@ process.on('SIGINT', async () => {
 
   // Close all active transports to properly clean up resources
   for (const sessionId in transports) {
-    if (Object.hasOwn(transports, sessionId)) {
+    if (Object.prototype.hasOwnProperty.call(transports, sessionId)) {
       try {
         console.log(`Closing transport for session ${sessionId}`);
         // eslint-disable-next-line no-await-in-loop

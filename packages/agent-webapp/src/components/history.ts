@@ -1,3 +1,4 @@
+
 import { LitElement, css, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
@@ -76,7 +77,7 @@ export class HistoryComponent extends LitElement {
         detail: { id: sessionId, messages },
         bubbles: true,
       });
-      this.dispatchEvent(loadSessionEvent);
+      (this as unknown as HTMLElement).dispatchEvent(loadSessionEvent);
 
       if (!isLargeScreen()) {
         this.open = false;
@@ -112,7 +113,7 @@ export class HistoryComponent extends LitElement {
           detail: { chats: this.chats },
           bubbles: true,
         });
-        this.dispatchEvent(chatsUpdatedEvent);
+        (this as unknown as HTMLElement).dispatchEvent(chatsUpdatedEvent);
         break;
       }
 
@@ -126,7 +127,7 @@ export class HistoryComponent extends LitElement {
           detail: { state },
           bubbles: true,
         });
-        this.dispatchEvent(stateUpdatedEvent);
+        (this as unknown as HTMLElement).dispatchEvent(stateUpdatedEvent);
         break;
       }
 

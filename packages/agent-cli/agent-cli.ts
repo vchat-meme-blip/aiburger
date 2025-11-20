@@ -156,7 +156,7 @@ export async function run() {
         baseURL: azureOpenAiEndpoint,
         async fetch(url, init = {}) {
           const token = await getToken();
-          const headers = new Headers(init.headers);
+          const headers = new Headers((init as RequestInit).headers);
           headers.set('Authorization', `Bearer ${token}`);
           return fetch(url, { ...init, headers });
         },

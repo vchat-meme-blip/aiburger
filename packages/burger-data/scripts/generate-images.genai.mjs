@@ -1,3 +1,4 @@
+// @ts-nocheck
 // This script uses GenAIScript (https://aka.ms/genaiscript)
 // to generate the images for the menu. Be warned that this script can be quite
 // long to run, as it will generate about 40 images.

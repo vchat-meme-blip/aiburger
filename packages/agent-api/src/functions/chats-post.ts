@@ -59,7 +59,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       };
     }
 
-    if (messages?.length === 0 || !messages.at(-1)?.content) {
+    if (messages?.length === 0 || !messages[messages.length - 1]?.content) {
       return {
         status: 400,
         jsonBody: {
@@ -87,7 +87,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         baseURL: azureOpenAiEndpoint,
         async fetch(url, init = {}) {
           const token = await getAzureOpenAiTokenProvider()();
-          const headers = new Headers(init.headers);
+          const headers = new Headers((init as RequestInit).headers);
           headers.set('Authorization', `Bearer ${token}`);
           return fetch(url, { ...init, headers });
         },
@@ -122,7 +122,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       systemPrompt: agentSystemPrompt,
     });
 
-    const question = messages.at(-1)!.content;
+    const question = messages[messages.length - 1]!.content;
     const previousMessages = await chatHistory.getMessages();
     context.log(`Previous messages in history: ${previousMessages.length}`);
 

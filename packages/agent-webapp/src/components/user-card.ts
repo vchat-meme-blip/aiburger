@@ -1,3 +1,4 @@
+
 import { LitElement, css, html, nothing } from 'lit';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import { customElement, state } from 'lit/decorators.js';
@@ -64,7 +65,7 @@ export class UserCard extends LitElement {
       try {
         await navigator.clipboard.writeText(this.userId);
         // Select the user-id text
-        const pre = this.renderRoot.querySelector('.user-id');
+        const pre = (this as any).renderRoot.querySelector('.user-id');
         if (pre) {
           const range = document.createRange();
           range.selectNodeContents(pre);

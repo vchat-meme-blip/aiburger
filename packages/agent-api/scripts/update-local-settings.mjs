@@ -17,25 +17,17 @@ const __dirname = path.dirname(__filename);
 // Env file is located in the root of the repository
 dotenv.config({ path: path.join(__dirname, '../../../.env'), quiet: true });
 
-let settings = {
+console.log('Setting Azure AI service values...');
+const settings = {
   FUNCTIONS_WORKER_RUNTIME: 'node',
   AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
   AzureWebJobsStorage: 'UseDevelopmentStorage=true',
-};
-const settingsFilePath = path.join(__dirname, '../local.settings.json');
-
-console.log('Setting Azure AI service values...');
-settings = {
-  ...settings,
   AZURE_OPENAI_API_ENDPOINT: process.env.AZURE_OPENAI_API_ENDPOINT,
   AZURE_OPENAI_MODEL: process.env.AZURE_OPENAI_MODEL,
-};
-
-console.log('Setting Cosmos DB service values...');
-settings = {
-  ...settings,
   AZURE_COSMOSDB_NOSQL_ENDPOINT: process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT,
 };
+
+const settingsFilePath = path.join(__dirname, '../local.settings.json');
 
 writeFileSync(
   settingsFilePath,

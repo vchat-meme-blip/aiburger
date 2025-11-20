@@ -17,25 +17,17 @@ const __dirname = path.dirname(__filename);
 // Env file is located in the root of the repository
 dotenv.config({ path: path.join(__dirname, '../../../.env'), quiet: true });
 
-let settings = {
+console.log('Setting Blob Storage service values...');
+const settings = {
   FUNCTIONS_WORKER_RUNTIME: 'node',
   AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
   AzureWebJobsStorage: 'UseDevelopmentStorage=true',
-};
-const settingsFilePath = path.join(__dirname, '../local.settings.json');
-
-console.log('Setting Blob Storage service values...');
-settings = {
-  ...settings,
   AZURE_STORAGE_URL: process.env.AZURE_STORAGE_URL,
   AZURE_STORAGE_CONTAINER_NAME: process.env.AZURE_STORAGE_CONTAINER_NAME,
-};
-
-console.log('Setting Cosmos DB service values...');
-settings = {
-  ...settings,
   AZURE_COSMOSDB_NOSQL_ENDPOINT: process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT,
 };
+
+const settingsFilePath = path.join(__dirname, '../local.settings.json');
 
 writeFileSync(
   settingsFilePath,

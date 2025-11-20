@@ -1,3 +1,4 @@
+
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
@@ -163,9 +164,9 @@ export class AuthComponent extends LitElement {
     super.updated(changedProperties);
 
     if (this._userDetails) {
-      this.classList.add('authenticated');
+      (this as unknown as HTMLElement).classList.add('authenticated');
     } else {
-      this.classList.remove('authenticated');
+      (this as unknown as HTMLElement).classList.remove('authenticated');
     }
   }
 

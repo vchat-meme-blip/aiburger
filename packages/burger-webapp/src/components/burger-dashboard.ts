@@ -71,7 +71,7 @@ export class BurgerDashboard extends LitElement {
     // Animate new orders (fade-in)
     for (const order of currentOrders) {
       if (!previousOrders.some((o) => o.id === order.id)) {
-        const node = this.renderRoot.querySelector(`[data-order-id='${order.id}']`);
+        const node = (this as any).renderRoot.querySelector(`[data-order-id='${order.id}']`);
         if (node) {
           node.classList.add('fade-in');
         }
@@ -84,7 +84,7 @@ export class BurgerDashboard extends LitElement {
         this.inProgressOrders.some((o) => o.id === order.id) || this.completedOrders.some((o) => o.id === order.id);
       if (!currentIds.has(order.id) && !isNowInOtherColumn && !this.leavingOrders.has(order.id)) {
         this.leavingOrders.set(order.id, order);
-        this.requestUpdate();
+        (this as any).requestUpdate();
       }
     }
   }
@@ -94,7 +94,7 @@ export class BurgerDashboard extends LitElement {
     if (order.status === 'in-preparation') return 'in preparation';
     if (order.status === 'ready') return 'ready';
     if (order.status === 'completed') return 'completed';
-    return order.status.replaceAll('-', ' ');
+    return order.status.replace(/-/g, ' ');
   }
 
   protected getOrderBoxClass(order: BurgerOrder): string {
@@ -140,7 +140,7 @@ export class BurgerDashboard extends LitElement {
 
   private handleFadeOutEnd(id: string) {
     this.leavingOrders.delete(id);
-    this.requestUpdate();
+    (this as any).requestUpdate();
   }
 
   protected getNewOrderCount() {
@@ -217,7 +217,7 @@ export class BurgerDashboard extends LitElement {
     `;
   };
 
-  protected override render() {
+  protected render() {
     return this.hasError ? this.renderError() : this.renderDashboard();
   }
 

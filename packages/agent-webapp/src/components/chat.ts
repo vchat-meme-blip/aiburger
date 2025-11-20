@@ -1,3 +1,4 @@
+
 import { LitElement, css, html, nothing } from 'lit';
 import { map } from 'lit/directives/map.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -108,7 +109,7 @@ export class ChatComponent extends LitElement {
 
   protected lastStepSetAt = 0;
   protected stepQueue: AgentStep[] = [];
-  protected stepTimer: NodeJS.Timeout | undefined;
+  protected stepTimer: number | undefined;
 
   async onSuggestionClicked(suggestion: string) {
     this.question = suggestion;
@@ -229,7 +230,7 @@ export class ChatComponent extends LitElement {
 
     const elapsed = Date.now() - this.lastStepSetAt;
     const waitTime = Math.max(0, min - elapsed);
-    this.stepTimer = setTimeout(() => {
+    this.stepTimer = window.setTimeout(() => {
       this.stepTimer = undefined;
       if (this.stepQueue.length > 0) {
         const next = this.stepQueue.shift()!;
@@ -266,7 +267,7 @@ export class ChatComponent extends LitElement {
         detail: { state },
         bubbles: true,
       });
-      this.dispatchEvent(stateUpdatedEvent);
+      (this as unknown as HTMLElement).dispatchEvent(stateUpdatedEvent);
     }
 
     super.requestUpdate(name, oldValue);
@@ -277,7 +278,7 @@ export class ChatComponent extends LitElement {
       detail: { messages: this.messages },
       bubbles: true,
     });
-    this.dispatchEvent(messagesUpdatedEvent);
+    (this as unknown as HTMLElement).dispatchEvent(messagesUpdatedEvent);
   }
 
   protected scrollToLastMessage() {
@@ -412,7 +413,7 @@ export class ChatComponent extends LitElement {
           .value=${this.question}
           autocomplete="off"
           @input=${(event) => {
-            this.question = event.target.value;
+            this.question = (event.target as HTMLTextAreaElement).value;
           }}
           @keypress=${this.onKeyPressed}
           .disabled=${this.isLoading}
@@ -441,7 +442,7 @@ export class ChatComponent extends LitElement {
         <div class="messages">
           ${repeat(parsedMessages, (_, index) => index, this.renderMessage)} ${this.renderLoader()}
           ${this.hasError ? this.renderError() : nothing}
-          ${this.renderFollowupQuestions(parsedMessages.at(-1)?.followupQuestions ?? [])}
+          ${this.renderFollowupQuestions(parsedMessages[parsedMessages.length - 1]?.followupQuestions ?? [])}
         </div>
         ${this.renderChatInput()}
       </section>
@@ -462,7 +463,7 @@ export class ChatComponent extends LitElement {
       --card-shadow: var(--azc-card-shadow, 0 0.3px 0.9px rgba(0 0 0 / 12%), 0 1.6px 3.6px rgba(0 0 0 / 16%));
       --space-md: var(--azc-space-md, 12px);
       --space-xl: var(--azc-space-xl, calc(var(--space-md) * 2));
-      --space-xs: var(--azc-space-xs, calc(var(--space-md) / 2));
+      --space-xxs: var(--azc-space-xs, calc(var(--space-md) / 2));
       --space-xxs: var(--azc-space-xs, calc(var(--space-md) / 4));
       --border-radius: var(--azc-border-radius, 16px);
       --focus-outline: var(--azc-focus-outline, 2px solid);
