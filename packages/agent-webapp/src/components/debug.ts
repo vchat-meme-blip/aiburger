@@ -3,8 +3,8 @@ import { LitElement, css, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import { customElement, property, state } from 'lit/decorators.js';
-import { ParsedMessage } from '../message-parser.js';
-import { AgentStep } from '../models.js';
+import { type ParsedMessage } from '../message-parser.js';
+import { type AgentStep } from '../models.js';
 import aiSvg from '../../assets/icons/ai.svg?raw';
 
 @customElement('azc-debug')
