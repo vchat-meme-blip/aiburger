@@ -237,6 +237,8 @@ async function* createJsonStream(
   sessionId: string,
   onComplete: (responseContent: string) => Promise<void>,
 ) {
+  let sentSessionId = false;
+
   for await (const chunk of chunks) {
     const { data } = chunk;
     let responseChunk: AIChatCompletionDelta | undefined;
@@ -289,6 +291,15 @@ async function* createJsonStream(
 
     if (!responseChunk) {
       continue;
+    }
+
+    // Inject sessionId into the first response chunk context
+    if (!sentSessionId) {
+      if (!responseChunk.context) {
+        responseChunk.context = {};
+      }
+      responseChunk.context.sessionId = sessionId;
+      sentSessionId = true;
     }
 
     // Format response chunks in Newline delimited JSON
