@@ -1,13 +1,14 @@
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { HttpRequest, InvocationContext, HttpResponseInit, app } from '@azure/functions';
-import { createAgent, AIMessage, HumanMessage } from 'langchain';
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
 import { ChatOpenAI } from '@langchain/openai';
 import { AzureCosmsosDBNoSQLChatMessageHistory } from '@langchain/azure-cosmosdb';
 import { loadMcpTools } from '@langchain/mcp-adapters';
-import { StreamEvent } from '@langchain/core/dist/tracers/log_stream.js';
+import { StreamEvent } from '@langchain/core/tracers/log_stream';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { getAzureOpenAiTokenProvider, getCredentials, getInternalUserId } from '../auth.js';
 import { type AIChatCompletionRequest, type AIChatCompletionDelta } from '../models.js';
 
@@ -17,7 +18,7 @@ Only answer to requests that are related to burger orders and the menu. If the u
 Be conversational and friendly, like a real person would be, but keep your answers concise and to the point.
 
 ## Context
-The restaurant is called Contoso Burgers. Contoso Burgets always provides french fries and a fountain drink with every burger order, so there's no need to add them to orders.
+The restaurant is called Chicha Burgers. Chicha Burgers always provides french fries and a fountain drink with every burger order, so there's no need to add them to orders.
 
 ## Task
 1. Help the user with their request, ask any clarifying questions if needed.
@@ -93,6 +94,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
         modelName: process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o',
         streaming: true,
+        temperature: 0,
       });
     } else {
       // Azure OpenAI with Managed Identity
@@ -108,7 +110,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         },
         modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
         streaming: true,
-        useResponsesApi: true,
+        temperature: 0,
         apiKey: 'not_used',
       });
     }
@@ -132,10 +134,23 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const tools = await loadMcpTools('burger', client);
     context.log(`Loaded ${tools.length} tools from Burger MCP server`);
 
-    const agent = createAgent({
-      model,
+    // Use the modern createToolCallingAgent pattern
+    const agent = await createToolCallingAgent({
+      llm: model,
       tools,
-      systemPrompt: agentSystemPrompt,
+      prompt: await import('@langchain/core/prompts').then(m => 
+        m.ChatPromptTemplate.fromMessages([
+          ["system", agentSystemPrompt],
+          ["placeholder", "{chat_history}"],
+          ["human", "{input}"],
+          ["placeholder", "{agent_scratchpad}"],
+        ])
+      ),
+    });
+
+    const agentExecutor = new AgentExecutor({
+      agent,
+      tools,
     });
 
     const question = messages[messages.length - 1]!.content;
@@ -143,9 +158,10 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     context.log(`Previous messages in history: ${previousMessages.length}`);
 
     // Start the agent and stream the response events
-    const responseStream = agent.streamEvents(
+    const responseStream = agentExecutor.streamEvents(
       {
-        messages: [['human', `userId: ${userId}`], ...previousMessages, ['human', question]],
+        input: question,
+        chat_history: [['human', `userId: ${userId}`], ...previousMessages],
       },
       {
         configurable: { sessionId },
@@ -204,6 +220,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
   } catch (_error: unknown) {
     const error = _error as Error;
     context.error(`Error when processing chat-post request: ${error.message}`);
+    context.error(error);
 
     return {
       status: 500,
@@ -224,34 +241,31 @@ async function* createJsonStream(
     const { data } = chunk;
     let responseChunk: AIChatCompletionDelta | undefined;
 
-    if (chunk.event === 'on_chat_model_end' && data.output?.content.length > 0) {
+    if (chunk.event === 'on_chain_end' && chunk.name === 'AgentExecutor' && data.output) {
       // End of our agentic chain
-      const content = data?.output.content[0].text ?? data.output.content ?? '';
+      const content = typeof data.output === 'string' ? data.output : data.output.output;
       await onComplete(content);
-    } else if (chunk.event === 'on_chat_model_stream' && data.chunk.content.length > 0) {
+    } else if (chunk.event === 'on_chat_model_stream' && data.chunk?.content) {
       // Streaming response from the LLM
-      responseChunk = {
-        delta: {
-          content: data.chunk.content[0].text ?? data.chunk.content,
-          role: 'assistant',
-        },
-      };
-    } else if (chunk.event === 'on_chat_model_end') {
-      // Intermediate LLM response (no content)
+      const content = typeof data.chunk.content === 'string' ? data.chunk.content : '';
+      if (content) {
+        responseChunk = {
+          delta: {
+            content,
+            role: 'assistant',
+          },
+        };
+      }
+    } else if (chunk.event === 'on_tool_start') {
+      // Start of a new tool call
       responseChunk = {
         delta: {
           context: {
-            intermediateSteps: [
-              {
-                type: 'llm',
-                name: chunk.name,
-                input: data.input ? JSON.stringify(data.input) : undefined,
-                output:
-                  data?.output.content.length > 0
-                    ? JSON.stringify(data?.output.content)
-                    : JSON.stringify(data?.output.tool_calls),
-              },
-            ],
+            currentStep: {
+              type: 'tool',
+              name: chunk.name,
+              input: data?.input ? JSON.stringify(data.input) : undefined,
+            },
           },
         },
       };
@@ -264,37 +278,10 @@ async function* createJsonStream(
               {
                 type: 'tool',
                 name: chunk.name,
-                input: data?.input?.input ?? undefined,
-                output: data?.output.content ?? undefined,
+                input: data?.input ? JSON.stringify(data.input) : undefined,
+                output: data?.output ? (typeof data.output === 'string' ? data.output : JSON.stringify(data.output)) : undefined,
               },
             ],
-          },
-        },
-      };
-    } else if (chunk.event === 'on_chat_model_start') {
-      // Start of a new LLM call
-      responseChunk = {
-        delta: {
-          context: {
-            currentStep: {
-              type: 'llm',
-              name: chunk.name,
-              input: data?.input ?? undefined,
-            },
-          },
-        },
-        context: { sessionId },
-      };
-    } else if (chunk.event === 'on_tool_start') {
-      // Start of a new tool call
-      responseChunk = {
-        delta: {
-          context: {
-            currentStep: {
-              type: 'tool',
-              name: chunk.name,
-              input: data?.input?.input ? JSON.stringify(data.input?.input) : undefined,
-            },
           },
         },
       };

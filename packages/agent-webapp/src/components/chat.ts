@@ -47,32 +47,32 @@ export const chatDefaultOptions: ChatComponentOptions = {
   enableDebug: true,
   minStepDisplayMs: 1000,
   promptSuggestions: [
-    'What burgers do you have on the menu?',
-    'What toppings are available?',
-    'Order a vegan burger for me',
+    'What promos are available today?',
+    'Order a double cheeseburger for delivery',
+    'Track my order status',
   ],
   messages: [],
   strings: {
-    promptSuggestionsTitle: 'Ask about our burgers or try an example',
+    promptSuggestionsTitle: 'Ask Chicha about burgers & deals',
     citationsTitle: 'Citations:',
-    followUpQuestionsTitle: 'Follow-up questions:',
-    chatInputPlaceholder: 'Ask about our burgers, toppings, or place an order...',
+    followUpQuestionsTitle: 'Suggested follow-up:',
+    chatInputPlaceholder: 'Type your order or question...',
     chatInputButtonLabel: 'Send question',
-    assistant: 'Burger Assistant',
+    assistant: 'Chicha AI',
     user: 'You',
-    errorMessage: 'We are currently experiencing an issue.',
+    errorMessage: 'Oops, I dropped the ketchup. Please try again.',
     newChatButton: 'New chat',
     retryButton: 'Retry',
     tools: {
-      get_burgers: 'Retrieving burgers list',
-      get_burger_by_id: 'Retrieving burger details',
-      get_toppings: 'Retrieving toppings list',
-      get_topping_by_id: 'Retrieving topping details',
-      get_topping_categories: 'Retrieving topping categories',
-      get_orders: 'Retrieving orders list',
-      get_order_by_id: 'Retrieving order details',
-      place_order: 'Placing a new order',
-      delete_order_by_id: 'Deleting order',
+      get_burgers: 'Scanning menu...',
+      get_burger_by_id: 'Checking burger details...',
+      get_toppings: 'Looking for toppings...',
+      get_topping_by_id: 'Checking topping details...',
+      get_topping_categories: 'Checking categories...',
+      get_orders: 'Tracking orders...',
+      get_order_by_id: 'Locating order...',
+      place_order: 'Placing your delicious order...',
+      delete_order_by_id: 'Cancelling order...',
     },
   },
 };
@@ -524,7 +524,7 @@ export class ChatComponent extends LitElement {
       }
     }
     .chat-container {
-      height: 100cqh;
+      height: 100%;
       overflow: auto;
       container-type: inline-size;
       position: relative;
@@ -536,10 +536,14 @@ export class ChatComponent extends LitElement {
         Roboto,
         'Helvetica Neue',
         sans-serif;
+      display: flex;
+      flex-direction: column;
     }
     .suggestions-container {
       text-align: center;
       padding: var(--space-xl);
+      margin-top: auto;
+      margin-bottom: auto;
     }
     .suggestions {
       display: flex;
@@ -559,9 +563,12 @@ export class ChatComponent extends LitElement {
       border: var(--suggestion-border);
       border-radius: var(--border-radius);
       box-shadow: var(--suggestion-shadow);
+      font-weight: 500;
+      transition: transform 0.2s;
 
       &:hover {
         outline: var(--focus-outline) var(--primary);
+        transform: translateY(-3px);
       }
     }
     .messages {
@@ -569,6 +576,8 @@ export class ChatComponent extends LitElement {
       display: flex;
       flex-direction: column;
       gap: var(--space-md);
+      flex: 1;
+      overflow-y: auto;
     }
     .user {
       align-self: end;
