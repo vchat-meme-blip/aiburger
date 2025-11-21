@@ -20,7 +20,7 @@ app.http('uber-login', {
         }
         // Pass userId as state to retrieve it in the callback
         const loginUrl = uberClient.getLoginUrl(userId);
-        
+
         context.log(`Redirecting to Uber Auth URL for user: ${userId}`);
         return {
             status: 302,
@@ -53,14 +53,14 @@ app.http('uber-callback', {
         try {
             const tokenData = await uberClient.exchangeCodeForToken(code);
             const db = await DbService.getInstance();
-            
+
             // Save token linked to user
             // Add a timestamp to know when it expires relative to now
             const tokenWithTimestamp = {
                 ...tokenData,
                 acquired_at: Date.now()
             };
-            
+
             await db.updateUserToken(userId, 'uber', tokenWithTimestamp);
             context.log(`Uber token saved successfully for user: ${userId}`);
 
@@ -84,7 +84,7 @@ app.http('uber-webhook', {
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const signature = request.headers.get('x-uber-signature');
         const bodyText = await request.text();
-        
+
         // Prefer a dedicated webhook secret, fall back to client secret if not set
         const signingKey = process.env.UBER_WEBHOOK_SECRET || process.env.UBER_CLIENT_SECRET;
 
@@ -118,10 +118,10 @@ app.http('uber-webhook', {
 
         const payload = JSON.parse(bodyText);
         context.log(`Received Uber Webhook [${payload.event_type}]:`, payload);
-        
+
         // TODO: Process specific event types here
         // e.g. orders.notification -> fetch order details -> update DB -> notify user via SignalR
-        
+
         return { status: 200, body: 'OK' };
     }
 });
@@ -149,8 +149,16 @@ app.http('uber-nearby', {
         }
 
         try {
-            const results = await uberClient.searchRestaurants(tokenData.access_token, lat, long);
-            context.log(`Found ${results.stores ? results.stores.length : 0} restaurants for user ${userId}`);
+            interface UberSearchResponse {
+                stores?: Array<{
+                    id: string;
+                    name: string;
+                    // Add other properties as needed
+                }>;
+            }
+
+            const results = (await uberClient.searchRestaurants(tokenData.access_token, lat, long)) as UberSearchResponse;
+            context.log(`Found ${results?.stores?.length ?? 0} restaurants for user ${userId}`);
             return { status: 200, jsonBody: results };
         } catch (err: any) {
             context.error('Uber Nearby Search Failed', err);
