@@ -1,3 +1,4 @@
+
 import { WebPubSubClient } from '@azure/web-pubsub-client';
 
 export class RealtimeService {
@@ -24,27 +25,22 @@ export class RealtimeService {
       this.client = new WebPubSubClient({
         getClientAccessUrl: async () => {
           const res = await fetch(`${burgerApiUrl}/api/realtime/negotiate?userId=${userId}`);
-          if (!res.ok) throw new Error('Failed to negotiate realtime connection');
+          if (!res.ok) {
+             // Gracefully fail if service is unavailable (503) or error (500)
+             if (res.status === 503) {
+                 console.warn('Real-time features disabled (Server returned 503)');
+                 return ''; // Abort connection attempt
+             }
+             throw new Error(`Failed to negotiate realtime connection: ${res.statusText}`);
+          }
           const data = await res.json();
+          if (!data.url) throw new Error('No URL returned from negotiate');
           return data.url;
         }
       });
 
       this.client.on('server-message', (e) => {
         const eventData = e.message.data as any;
-        // Expecting { type: 'event', event: 'event-name', data: ... }
-        // However, the PubSubService sends it wrapped. Let's handle the unwrapping or raw data.
-        
-        // If sent via sendToUser with type 'event', the payload is what we passed in `data` field? 
-        // Actually, `e.message.data` contains the payload we sent.
-        // Our API sends { type: 'event', event: name, data: payload } inside the message body? 
-        // No, the client receives the raw data object we passed to `sendToUser`.
-        // But wait, `sendToUser` usually sends a custom event.
-        
-        // Simplified assumption for this demo:
-        // The data received here corresponds to the 3rd argument of sendToUser/sendToAll if using JSON content type.
-        // Our backend sends: { type: 'event', event: eventName, data: data }
-        
         const message = eventData;
         if (message && message.event) {
             this.emit(message.event, message.data);
@@ -55,7 +51,9 @@ export class RealtimeService {
       this.isConnected = true;
       console.log('Real-time connection established');
     } catch (err) {
-      console.warn('Real-time service unavailable:', err);
+      // Swallow the error to prevent crashing the UI, but log a warning
+      console.warn('Real-time service unavailable, falling back to polling/static updates.', err);
+      this.isConnected = false;
     }
   }
 

@@ -271,64 +271,67 @@ export class UserCard extends LitElement {
     :host {
       --azc-primary: linear-gradient(135deg, #de471d 0%, #ff6b3d 100%);
       --azc-border-radius: 16px;
-      --azc-text-color: #333;
+      --azc-text-color: #212121;
     }
     
-    /* Nav Link Styles */
+    /* Nav Link Styles - High Contrast */
     .member-card-link {
-      background: none;
-      border: none;
-      color: var(--azc-text-color); /* Ensure visibility on light navbar */
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #e0e0e0;
+      color: #212121 !important; /* Forced dark color */
       text-decoration: none;
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      transition: background 0.2s;
+      padding: 0.6rem 1.2rem;
+      border-radius: 50px;
+      transition: all 0.2s;
       display: flex;
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
       font-family: inherit;
-      font-size: inherit;
-      font-weight: 500;
+      font-size: 0.95rem;
+      font-weight: 700;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     .member-card-link:hover {
-      background: rgba(0, 0, 0, 0.05);
+      background: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     .card-icon {
       display: inline-block;
-      fill: currentColor;
+      fill: var(--azc-primary);
       width: 20px;
       height: 20px;
     }
 
-    /* Modal Styles */
+    /* Modal Styles - Centering Fix */
     .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(5px);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
-      padding: 2rem;
-      box-sizing: border-box;
+      z-index: 2000;
     }
     .modal-content {
       position: relative;
+      width: 90%;
       max-width: 700px;
-      width: 100%;
-      height: 600px;
       max-height: 90vh;
       background: #F9F9F9;
       border-radius: var(--azc-border-radius);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      color: #333;
+      /* Ensure it's visible on mobile */
+      margin: auto;
     }
     .modal-header {
         background: white;
@@ -338,6 +341,7 @@ export class UserCard extends LitElement {
         align-items: center;
         justify-content: center;
         position: relative;
+        flex-shrink: 0;
     }
     .close-button {
       position: absolute;
@@ -350,15 +354,19 @@ export class UserCard extends LitElement {
       line-height: 1;
       cursor: pointer;
       color: #666;
+      z-index: 10;
+      padding: 0.5rem;
     }
-    .close-button:hover { color: #333; }
+    .close-button:hover { color: #000; }
 
     .tabs {
         display: flex;
-        gap: 1rem;
+        gap: 0.5rem;
         background: #f0f0f0;
         padding: 4px;
         border-radius: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     .tab {
         background: none;
@@ -366,13 +374,14 @@ export class UserCard extends LitElement {
         padding: 8px 16px;
         border-radius: 6px;
         cursor: pointer;
-        font-weight: 500;
+        font-weight: 600;
         color: #666;
         transition: all 0.2s;
+        font-size: 0.9rem;
     }
     .tab.active {
         background: white;
-        color: var(--azc-primary);
+        color: #FF5722;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     
@@ -380,6 +389,9 @@ export class UserCard extends LitElement {
         flex: 1;
         overflow-y: auto;
         padding: 1.5rem;
+        color: #333;
+        /* Fix for scrolling inside modal */
+        min-height: 300px;
     }
 
     /* Identity Card Styles */
@@ -507,6 +519,8 @@ export class UserCard extends LitElement {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
     .order-date { font-size: 0.85rem; color: #888; }
     .order-status {
@@ -545,13 +559,14 @@ export class UserCard extends LitElement {
         padding: 2rem;
         margin-bottom: 2rem;
         box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        text-align: center;
     }
     .balance-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 2rem; }
     .balance-section .label { font-size: 0.9rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
     .balance-section .balance { font-size: 3rem; font-weight: 700; margin: 0.5rem 0; }
     .balance-section .sub-balance { font-family: monospace; opacity: 0.5; }
     
-    .wallet-actions { display: flex; gap: 1rem; justify-content: center; }
+    .wallet-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
     .wallet-btn {
         background: rgba(255,255,255,0.1);
         border: 1px solid rgba(255,255,255,0.2);

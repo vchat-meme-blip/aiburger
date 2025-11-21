@@ -1,3 +1,4 @@
+
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { HttpRequest } from '@azure/functions';
@@ -34,7 +35,7 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 }
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
-  // Get the user ID from Azure easy auth if it's available,
+  // Get the user ID from Azure easy auth if it's available
   const authUserId = getAuthenticationUserId(request);
   
   if (authUserId) {
@@ -47,8 +48,13 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
     if (user) {
       return user.id;
     }
+    // If we have a valid auth user ID but no DB record, we return the hash
+    // The me-get endpoint will create the record lazily if needed, 
+    // but this ensures downstream functions get the correct ID format immediately.
+    return id;
   }
 
   // Get the user ID from the request as a fallback
-  return body?.context?.userId ?? request.query.get('userId') ?? undefined;
+  const fallbackId = body?.context?.userId ?? request.query.get('userId') ?? undefined;
+  return fallbackId;
 }

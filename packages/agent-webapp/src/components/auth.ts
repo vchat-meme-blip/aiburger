@@ -37,7 +37,6 @@ export const authDefaultOptions: AuthComponentOptions = {
   providers: [
     { id: 'aad', label: 'Continue with Microsoft', icon: microsoftSvg, color: '#2F2F2F', textColor: '#fff' },
     { id: 'github', label: 'Continue with GitHub', icon: githubSvg, color: '#24292e', textColor: '#fff' },
-    // Azure SWA supports google natively. Added here for UI, maps to /.auth/login/google
     {
       id: 'google',
       label: 'Continue with Google',
@@ -102,7 +101,7 @@ export class AuthComponent extends LitElement {
         <div class="hero-content">
           <div class="badge">✨ AI-Powered Cravings</div>
           <h1>Hungry? Just Ask <span class="highlight">Chicha</span>.</h1>
-          <p class="subtitle">The first AI Agent that finds promos, schedules deliveries, and manages your orders across Uber, DoorDash, and POS systems. Never miss a bite.</p>
+          <p class="subtitle">The first AI Agent that finds promos, schedules deliveries, and manages your orders across Uber, DoorDash, and POS systems.</p>
 
           <div class="social-proof">
             <div class="avatars">
@@ -122,7 +121,6 @@ export class AuthComponent extends LitElement {
         </div>
 
         <div class="hero-visual">
-           <!-- A CSS-only abstract burger illustration -->
            <div class="abstract-burger">
               <div class="bun-top"></div>
               <div class="lettuce"></div>
@@ -135,29 +133,6 @@ export class AuthComponent extends LitElement {
                  <span>🚚</span> Arriving in 5m
               </div>
            </div>
-        </div>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="icon">🏷️</div>
-          <h3>Promo Hunter</h3>
-          <p>I monitor every platform 24/7. When your favorite burger drops in price, I alert you instantly.</p>
-        </div>
-        <div class="feature-card">
-          <div class="icon">⏰</div>
-          <h3>Smart Schedule</h3>
-          <p>Distracted gaming or working? Schedule orders in advance. I'll handle the rest.</p>
-        </div>
-        <div class="feature-card">
-          <div class="icon">💳</div>
-          <h3>Universal Pay</h3>
-          <p>Pay with Crypto or Fiat. We handle the conversion so you just handle the eating.</p>
-        </div>
-        <div class="feature-card">
-          <div class="icon">🛵</div>
-          <h3>Delivery Guard</h3>
-          <p>I track the rider. If they get lost, I call them. You don't have to lift a finger.</p>
         </div>
       </div>
 
@@ -183,10 +158,6 @@ export class AuthComponent extends LitElement {
           })}
         </div>
       </div>
-
-      <footer>
-        <p>© 2025 Chicha AI. Serving bytes and bites.</p>
-      </footer>
     </div>
   `;
 
@@ -228,15 +199,12 @@ export class AuthComponent extends LitElement {
       case 'status': {
         return this.renderStatus();
       }
-
       case 'guard': {
         return this.renderGuard();
       }
-
       case 'logout': {
         return this.renderLogout();
       }
-
       default: {
         return this.renderLogin();
       }
@@ -248,6 +216,7 @@ export class AuthComponent extends LitElement {
       display: block;
       width: 100%;
       height: 100%;
+      --azc-text-color-nav: #212121;
     }
 
     /* Loading State */
@@ -274,30 +243,35 @@ export class AuthComponent extends LitElement {
       gap: 0.5rem;
       align-items: center;
       font-size: 0.9rem;
-      font-weight: 500;
-      color: var(--azc-text-color);
+      font-weight: 600;
+      color: var(--azc-text-color-nav);
     }
     .login-icon {
       width: 24px;
       height: 24px;
       color: var(--azc-primary);
     }
+    /* Make logout button visible with dark grey color */
     .logout {
-      background: none;
+      background: rgba(0,0,0,0.05);
       border: 1px solid transparent;
       cursor: pointer;
-      padding: 4px;
+      padding: 6px;
       border-radius: 50%;
-      color: var(--azc-text-color);
+      color: #333333; /* Force dark color */
       transition: all 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .logout:hover {
-      background: rgba(0,0,0,0.05);
+      background: rgba(0,0,0,0.1);
       color: var(--azc-primary);
-      border-color: rgba(0,0,0,0.1);
+    }
+    .logout svg {
+      fill: currentColor;
+      width: 20px;
+      height: 20px;
     }
 
     /* --- Landing Page Styles --- */
@@ -368,19 +342,6 @@ export class AuthComponent extends LitElement {
     .highlight {
       color: var(--azc-primary);
       position: relative;
-    }
-
-    .highlight::after {
-      content: '';
-      position: absolute;
-      bottom: 5px;
-      left: 0;
-      width: 100%;
-      height: 8px;
-      background: var(--azc-secondary);
-      opacity: 0.3;
-      z-index: -1;
-      border-radius: 4px;
     }
 
     .subtitle {
@@ -514,42 +475,6 @@ export class AuthComponent extends LitElement {
       100% { transform: translateY(0px); }
     }
 
-    /* Features Grid */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      width: 100%;
-      max-width: 1200px;
-      margin-bottom: 5rem;
-    }
-
-    .feature-card {
-      background: white;
-      padding: 2rem;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-      transition: transform 0.2s;
-      border: 1px solid rgba(0,0,0,0.03);
-    }
-    .feature-card:hover {
-      transform: translateY(-5px);
-    }
-    .feature-card .icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-    }
-    .feature-card h3 {
-      margin: 0 0 0.5rem 0;
-      font-size: 1.25rem;
-      color: var(--azc-text-color);
-    }
-    .feature-card p {
-      margin: 0;
-      color: var(--azc-text-subtle);
-      line-height: 1.5;
-    }
-
     /* Login Section */
     .login-section {
       background: white;
@@ -611,13 +536,6 @@ export class AuthComponent extends LitElement {
       fill: currentColor;
       width: 100%;
       height: 100%;
-    }
-
-    footer {
-      margin-top: auto;
-      color: var(--azc-text-subtle);
-      font-size: 0.9rem;
-      padding-bottom: 2rem;
     }
   `;
 }

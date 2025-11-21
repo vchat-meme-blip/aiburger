@@ -1,3 +1,4 @@
+
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { PubSubService } from '../pubsub-service.js';
 
@@ -18,12 +19,20 @@ app.http('realtime-negotiate', {
                     url: tokenResponse.url
                 }
             };
-        } catch (error) {
+        } catch (error: any) {
+            // If service is not configured, we expect 'Web PubSub not initialized' error
+            if (error.message === 'Web PubSub not initialized') {
+                 context.warn('Real-time negotiate skipped: Web PubSub not configured.');
+                 return {
+                    status: 503, // Service Unavailable
+                    jsonBody: { error: 'Real-time service unavailable' }
+                 };
+            }
+            
             context.error('Failed to negotiate Web PubSub connection:', error);
-            // If Web PubSub isn't configured, return 503 so client knows to stop trying or fallback
             return {
-                status: 503,
-                jsonBody: { error: 'Real-time service unavailable' }
+                status: 500,
+                jsonBody: { error: 'Internal Server Error' }
             };
         }
     }

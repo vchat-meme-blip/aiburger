@@ -69,7 +69,7 @@ app.http('discovery-search', {
                 if (tokenData?.access_token) token = tokenData.access_token;
             }
 
-            const uberData: UberSearchResponse = await uberClient.searchRestaurants(token, lat, long);
+            const uberData = (await uberClient.searchRestaurants(token, lat, long)) as UberSearchResponse;
             
             if (uberData && uberData.stores) {
                 for (const store of uberData.stores) {

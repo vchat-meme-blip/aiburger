@@ -1,3 +1,4 @@
+
 import { WebPubSubServiceClient } from '@azure/web-pubsub';
 import process from 'node:process';
 
@@ -30,6 +31,7 @@ export class PubSubService {
       console.log('Web PubSub Service initialized.');
     } catch (error) {
       console.error('Failed to initialize Web PubSub client:', error);
+      // Don't crash, just don't set isInitialized
     }
   }
 

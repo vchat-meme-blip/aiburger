@@ -17,13 +17,17 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
     return {
       status: 400,
       jsonBody: {
-        error: 'Invalid or missing userId in the request',
+        error: 'Invalid or missing userId in the request. Please ensure you are logged in or provide userId in query.',
       },
     };
   }
 
   try {
     if (!azureCosmosDbEndpoint) {
+      // Fallback to memory (mock) if no DB
+      if (process.env.NODE_ENV !== 'production') {
+          return { jsonBody: [] };
+      }
       const errorMessage = 'Missing required environment variable: AZURE_COSMOSDB_NOSQL_ENDPOINT';
       context.error(errorMessage);
       return {
@@ -52,20 +56,28 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
       return { jsonBody: chatMessages };
     }
 
-    const sessions = await chatHistory.getAllSessions();
-    const chatSessions = sessions.map((session) => ({
-      id: session.id,
-      title: session.context?.title,
-    }));
-    return { jsonBody: chatSessions };
+    try {
+        const sessions = await chatHistory.getAllSessions();
+        const chatSessions = sessions.map((session) => ({
+          id: session.id,
+          title: session.context?.title,
+        }));
+        return { jsonBody: chatSessions };
+    } catch (dbError: any) {
+        if (dbError.code === 404) {
+            return { jsonBody: [] }; // No history container yet
+        }
+        throw dbError;
+    }
+
   } catch (_error: unknown) {
     const error = _error as Error;
     context.error(`Error when processing chats-get request: ${error.message}`);
 
     return {
-      status: 404,
+      status: 500, // Changed from 404 to 500 for generic errors, specific 404s handled above
       jsonBody: {
-        error: 'Session not found or database error',
+        error: 'Failed to retrieve chat history',
       },
     };
   }
