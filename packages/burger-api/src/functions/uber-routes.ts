@@ -11,7 +11,7 @@ app.http('uber-login', {
     methods: ['GET'],
     authLevel: 'anonymous',
     route: 'uber/login',
-    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+    handler: async (request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> => {
         const userId = request.query.get('userId');
         if (!userId) {
             return { status: 400, body: 'Missing userId' };

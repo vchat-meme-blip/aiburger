@@ -151,11 +151,14 @@ export async function run() {
 
     let model: ChatOpenAI;
 
+    // Priority: 1. OPENAI_MODEL, 2. AZURE_OPENAI_MODEL, 3. Default 'gpt-4o-mini'
+    const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
+
     if (openAiApiKey) {
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
-        modelName: process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o',
+        modelName: modelName,
         streaming: true,
       });
     } else {
@@ -173,7 +176,7 @@ export async function run() {
             return fetch(url, { ...init, headers });
           },
         },
-        modelName: process.env.AZURE_OPENAI_MODEL ?? 'gpt-5-mini',
+        modelName: modelName,
         streaming: true,
         useResponsesApi: true,
         apiKey: 'not_used',

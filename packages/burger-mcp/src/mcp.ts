@@ -16,13 +16,13 @@ export function getMcpServer() {
 
 // Helper that wraps MCP tool creation
 // It handles arguments typing, error handling and response formatting
-export function createMcpTool<T extends z.ZodTypeAny>(
+export function createMcpTool(
   server: McpServer,
   options: {
     name: string;
     description: string;
     schema?: z.ZodObject<z.ZodRawShape>;
-    handler: (args: z.infer<z.ZodObject<z.ZodRawShape>>) => Promise<string>;
+    handler: (args: any) => Promise<string>;
   },
 ) {
   if (options.schema) {
