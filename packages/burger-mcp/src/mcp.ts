@@ -26,7 +26,7 @@ export function createMcpTool(
   },
 ) {
   if (options.schema) {
-    server.tool(options.name, options.description, options.schema.shape, async (args: z.ZodRawShape) => {
+    server.tool(options.name, options.description, options.schema.shape, async (args: any) => {
       try {
         const result = await options.handler(args);
         return {

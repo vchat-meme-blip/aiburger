@@ -7,8 +7,8 @@ import { getUserInfo } from '../services/auth.service.js';
 import type { AuthDetails } from '../services/auth.service.js';
 import personSvg from '../../assets/icons/person.svg?raw';
 import logoutSvg from '../../assets/icons/logout.svg?raw';
-import microsoftSvg from '../../assets/providers/microsoft.svg?inline';
-import githubSvg from '../../assets/providers/github.svg?inline';
+import microsoftSvg from '../../assets/providers/microsoft.svg?raw';
+import githubSvg from '../../assets/providers/github.svg?raw';
 
 // Standard Azure SWA routes
 const loginRoute = '/.auth/login';
@@ -27,6 +27,7 @@ export type AuthProvider = {
   icon: string;
   color: string;
   textColor: string;
+  borderColor?: string;
 };
 
 export const authDefaultOptions: AuthComponentOptions = {
@@ -614,10 +615,4 @@ export class AuthComponent extends LitElement {
       padding-bottom: 2rem;
     }
   `;
-}
-
-declare global {
-  interface HTMLElementTagNameMap {
-    'azc-auth': AuthComponent;
-  }
 }

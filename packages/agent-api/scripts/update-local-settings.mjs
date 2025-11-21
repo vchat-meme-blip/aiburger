@@ -22,8 +22,14 @@ const settings = {
   FUNCTIONS_WORKER_RUNTIME: 'node',
   AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
   AzureWebJobsStorage: 'UseDevelopmentStorage=true',
+  // Azure OpenAI
   AZURE_OPENAI_API_ENDPOINT: process.env.AZURE_OPENAI_API_ENDPOINT,
   AZURE_OPENAI_MODEL: process.env.AZURE_OPENAI_MODEL,
+  // Standard OpenAI (or Azure Key fallback)
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY,
+  OPENAI_API_BASE_URL: process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT,
+  OPENAI_MODEL: process.env.OPENAI_MODEL,
+  // Cosmos
   AZURE_COSMOSDB_NOSQL_ENDPOINT: process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT,
 };
 

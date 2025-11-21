@@ -1,5 +1,7 @@
+
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
+import process from 'node:process';
 import { HttpRequest, InvocationContext, HttpResponseInit, app } from '@azure/functions';
 import { createAgent, AIMessage, HumanMessage } from 'langchain';
 import { ChatOpenAI } from '@langchain/openai';
@@ -45,8 +47,11 @@ const titleSystemPrompt = `Create a short, punchy title for this chat session (m
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
-  const openAiApiKey = process.env.OPENAI_API_KEY;
-  const openAiBaseUrl = process.env.OPENAI_API_BASE_URL;
+  // Check both standard OPENAI_API_KEY and AZURE_OPENAI_API_KEY (which user might have set with a standard key)
+  const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
+  // Check both base URL vars
+  const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
+  
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   // We need the Burger API URL to construct the login link. Usually inferred or env var.
   // If not set, we guess based on convention or fallback to local.
@@ -83,8 +88,9 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       context.log(`User Location: ${userLocation.lat}, ${userLocation.long}`);
     }
 
+    // Ensure we have some way to connect to an LLM
     if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
-      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY) or BURGER_MCP_URL';
+      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY/AZURE_OPENAI_API_KEY) or BURGER_MCP_URL';
       context.error(errorMessage);
       return {
         status: 500,
@@ -99,8 +105,11 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     // Priority: 1. OPENAI_MODEL, 2. AZURE_OPENAI_MODEL, 3. Default 'gpt-4o-mini'
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
 
+    // Logic: If an API Key is provided (standard OpenAI style), use it.
+    // Otherwise assume Azure OpenAI Managed Identity.
     if (openAiApiKey) {
       // Standard OpenAI or compatible endpoint
+      context.log('Using Standard OpenAI (or compatible) via API Key');
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
@@ -109,6 +118,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       });
     } else {
       // Azure OpenAI with Managed Identity
+      context.log('Using Azure OpenAI via Managed Identity');
       model = new ChatOpenAI({
         configuration: {
           baseURL: azureOpenAiEndpoint,
