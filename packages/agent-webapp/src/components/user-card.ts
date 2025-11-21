@@ -330,8 +330,8 @@ export class UserCard extends LitElement {
       overflow: hidden;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
       color: #333;
-      /* Ensure it's visible on mobile */
-      margin: auto;
+      /* Center the modal content if flex fails */
+      margin: 0 auto;
     }
     .modal-header {
         background: white;
@@ -390,7 +390,6 @@ export class UserCard extends LitElement {
         overflow-y: auto;
         padding: 1.5rem;
         color: #333;
-        /* Fix for scrolling inside modal */
         min-height: 300px;
     }
 

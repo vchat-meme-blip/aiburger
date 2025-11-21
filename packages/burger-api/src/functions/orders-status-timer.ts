@@ -4,8 +4,8 @@ import { PubSubService } from '../pubsub-service.js';
 import { OrderStatus } from '../order.js';
 
 app.timer('orders-status-timer', {
-  // Runs every 40 seconds
-  schedule: '*/40 * * * * *',
+  // Runs every 2 minutes to save Web PubSub quota (Free Tier limit: 20k messages/day)
+  schedule: '0 */2 * * * *',
   async handler(_timer, context: InvocationContext) {
     context.log('Order status timer triggered');
     const db = await DbService.getInstance();

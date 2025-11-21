@@ -81,7 +81,7 @@ export class AuthComponent extends LitElement {
     html`<section class="auth-status">
       <span class="login-icon">${unsafeSVG(personSvg)}</span>
       ${this._userDetails
-        ? html`<span>${this._userDetails.userDetails}</span>
+        ? html`<span class="username">${this._userDetails.userDetails}</span>
             <slot name="logout"> ${this.renderLogout()} </slot>`
         : nothing}
     </section>`;
@@ -240,7 +240,7 @@ export class AuthComponent extends LitElement {
     /* Authentication Status (Navbar) */
     .auth-status {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.8rem;
       align-items: center;
       font-size: 0.9rem;
       font-weight: 600;
@@ -250,28 +250,40 @@ export class AuthComponent extends LitElement {
       width: 24px;
       height: 24px;
       color: var(--azc-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .username {
+        display: block;
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     /* Make logout button visible with dark grey color */
     .logout {
       background: rgba(0,0,0,0.05);
       border: 1px solid transparent;
       cursor: pointer;
-      padding: 6px;
+      padding: 8px;
       border-radius: 50%;
       color: #333333; /* Force dark color */
       transition: all 0.2s;
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 36px;
+      height: 36px;
     }
     .logout:hover {
-      background: rgba(0,0,0,0.1);
+      background: rgba(255, 87, 34, 0.1);
       color: var(--azc-primary);
     }
     .logout svg {
       fill: currentColor;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
     }
 
     /* --- Landing Page Styles --- */

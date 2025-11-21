@@ -1,4 +1,3 @@
-
 import { WebPubSubServiceClient } from '@azure/web-pubsub';
 import process from 'node:process';
 
@@ -40,7 +39,12 @@ export class PubSubService {
       throw new Error('Web PubSub not initialized');
     }
     // Token valid for 60 minutes
-    return await this.client.getClientAccessToken({ userId, expirationTimeInMinutes: 60 });
+    try {
+        return await this.client.getClientAccessToken({ userId, expirationTimeInMinutes: 60 });
+    } catch (error: any) {
+        console.error('Failed to generate access token:', error);
+        throw error;
+    }
   }
 
   public async broadcastToUser(userId: string, eventName: string, data: any) {
@@ -54,8 +58,13 @@ export class PubSubService {
         data: data
       });
       console.log(`Broadcasted ${eventName} to user ${userId}`);
-    } catch (error) {
-      console.error(`Failed to broadcast to user ${userId}:`, error);
+    } catch (error: any) {
+      // Handle quota exceeded or throttling gracefully
+      if (error.statusCode === 429 || error.statusCode === 439) {
+          console.warn(`Web PubSub Quota Exceeded or Throttled. Dropping message for user ${userId}.`);
+      } else {
+          console.error(`Failed to broadcast to user ${userId}:`, error);
+      }
     }
   }
 
@@ -69,8 +78,12 @@ export class PubSubService {
             event: eventName,
             data: data
         });
-    } catch (error) {
-        console.error('Failed to broadcast to all:', error);
+    } catch (error: any) {
+        if (error.statusCode === 429 || error.statusCode === 439) {
+            console.warn(`Web PubSub Quota Exceeded. Dropping broadcast message.`);
+        } else {
+            console.error('Failed to broadcast to all:', error);
+        }
     }
   }
 }
