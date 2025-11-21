@@ -4,7 +4,9 @@ export const apiBaseUrl: string = import.meta.env.VITE_API_URL || '';
 
 export type ChatRequestOptions = {
   messages: AIChatMessage[];
-  context?: Record<string, unknown>;
+  context?: Record<string, unknown> & {
+    location?: { lat: number; long: number };
+  };
   apiUrl: string;
 };
 

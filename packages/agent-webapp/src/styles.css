@@ -1,13 +1,14 @@
 :root {
   /* Chicha Brand Colors */
   --azc-primary: #FF5722; /* Deep Orange */
+  --azc-primary-light: #FF8A65;
   --azc-secondary: #FFC107; /* Amber */
   --azc-accent: #212121; /* Dark Grey */
-  --azc-bg: #FAFAFA; /* Off-white background */
+  --azc-bg: #F5F7FA; /* Light crisp background */
   --azc-card-bg: #FFFFFF;
   --azc-text-color: #212121;
   --azc-text-subtle: #757575;
-  --azc-border-radius: 12px;
+  --azc-border-radius: 16px;
   
   /* Auth & UI Specifics */
   --azc-button-radius: 50px;
@@ -31,13 +32,15 @@ body {
 nav {
   display: flex;
   flex: 0 1 auto;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--azc-accent);
   padding: 1rem 2rem;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid rgba(0,0,0,0.05);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
   z-index: 10;
 
   & .logo-container {
@@ -77,7 +80,6 @@ main {
   & > azc-auth {
     flex: auto;
     display: flex; 
-    /* Ensure it takes full height to center the landing page */
     flex-direction: column; 
   }
 
@@ -102,4 +104,142 @@ azc-chat {
 azc-auth[type] {
   font-size: 16px;
   margin-left: 1em;
+}
+
+/* --- Rich Content Styling (Restaurant Cards) --- */
+
+.restaurant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+  width: 100%;
+}
+
+.restaurant-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.restaurant-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.card-image {
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.promo-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: #4CAF50;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.card-details {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.card-details h4 {
+  margin: 0 0 6px 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.card-details .meta {
+  display: flex;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.card-details .fee {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.order-btn {
+  margin-top: auto;
+  display: block;
+  text-align: center;
+  background: var(--azc-primary);
+  color: white;
+  text-decoration: none;
+  padding: 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.order-btn:hover {
+  background: #F4511E;
+  text-decoration: none;
+}
+
+/* --- Toast Notifications --- */
+.toast-notification {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(33, 33, 33, 0.9);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* --- Location Scanning Animation --- */
+@keyframes radar-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 87, 34, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
+  }
+}
+
+.location-button.active {
+  animation: radar-ping 2s infinite;
+  color: var(--azc-primary);
+  background: rgba(255, 87, 34, 0.1);
 }

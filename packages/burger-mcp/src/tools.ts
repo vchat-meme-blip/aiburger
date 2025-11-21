@@ -111,6 +111,55 @@ export const tools = [
       });
     },
   },
+  {
+    name: 'search_nearby_restaurants',
+    description:
+      'Search for real nearby restaurants using Uber Eats (requires userId, latitude, and longitude).',
+    schema: z.object({
+      userId: z.string().describe('ID of the user performing the search'),
+      lat: z.number().describe('Latitude of the user location'),
+      long: z.number().describe('Longitude of the user location'),
+    }),
+    async handler(args: { userId: string; lat: number; long: number }) {
+      try {
+         const resultJson = await fetchBurgerApi(`/api/uber/nearby?userId=${args.userId}&lat=${args.lat}&long=${args.long}`);
+         const results = JSON.parse(resultJson);
+         
+         if (results.stores && results.stores.length > 0) {
+             // Generate a rich HTML grid for the frontend
+             let html = `<div class="restaurant-grid">`;
+             for (const store of results.stores) {
+                 html += `
+                 <div class="restaurant-card">
+                     <div class="card-image" style="background-image: url('${store.image_url}')">
+                        ${store.promo ? `<span class="promo-badge">${store.promo}</span>` : ''}
+                     </div>
+                     <div class="card-details">
+                         <h4>${store.name}</h4>
+                         <div class="meta">
+                            <span class="rating">⭐ ${store.rating}</span>
+                            <span class="eta">🕒 ${store.eta} min</span>
+                         </div>
+                         <div class="fee">Delivery: ${store.delivery_fee}</div>
+                         <a href="${store.url}" target="_blank" class="order-btn">Order on Uber Eats</a>
+                     </div>
+                 </div>`;
+             }
+             html += `</div>`;
+             return html;
+         } else if (Array.isArray(results) && results.length > 0) {
+             // Fallback for simple arrays
+             return results.map((r: any) => `- ${r.name}`).join('\n');
+         } else {
+             return "No restaurants found nearby.";
+         }
+
+      } catch (e: any) {
+         // Return the error as text so the agent can explain it
+         return `Error searching: ${e.message || e}`;
+      }
+    },
+  },
 ];
 
 // Wraps standard fetch to include the base URL and handle errors
@@ -127,7 +176,13 @@ async function fetchBurgerApi(url: string, options: RequestInit = {}): Promise<s
       },
     });
     if (!response.ok) {
-      throw new Error(`Error fetching ${fullUrl}: ${response.statusText}`);
+      const errorBody = await response.text();
+      try {
+         const jsonError = JSON.parse(errorBody);
+         throw new Error(jsonError.error || jsonError.message || response.statusText);
+      } catch {
+         throw new Error(errorBody || response.statusText);
+      }
     }
 
     if (response.status === 204) {

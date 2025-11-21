@@ -51,6 +51,8 @@ export class DbService {
   private localBurgers: Burger[] = [];
   private localToppings: Topping[] = [];
   private localOrders: Order[] = [];
+  // In-memory store for user tokens when using local mode
+  private localUserTokens: Map<string, any> = new Map();
   private isCosmosDbInitialized = false;
 
   static async getInstance(): Promise<DbService> {
@@ -431,7 +433,8 @@ export class DbService {
   // User methods
   async createUser(id: string, name: string): Promise<void> {
     if (!this.usersContainer) {
-      console.warn('Users container not initialized. User creation skipped.');
+      console.warn('Users container not initialized. User creation skipped (local mode).');
+      this.localUserTokens.set(id, { id, name, createdAt: new Date().toISOString() });
       return;
     }
 
@@ -442,14 +445,14 @@ export class DbService {
         createdAt: new Date().toISOString(),
       });
     } catch (error) {
-      console.error('Error creating user:', error);
+      // Ignore if user already exists
     }
   }
 
   async getUserName(id: string): Promise<string | undefined> {
     if (!this.usersContainer) {
-      console.warn('Users container not initialized. Cannot fetch user name.');
-      return undefined;
+      const user = this.localUserTokens.get(id);
+      return user?.name;
     }
 
     try {
@@ -463,23 +466,23 @@ export class DbService {
 
   async userExists(id: string): Promise<boolean> {
     if (!this.usersContainer) {
-      console.warn('Users container not initialized. Assuming user exists.');
-      return true; // Fallback to allowing operation
+       // In local mode with no DB, we might default to true or check local cache.
+       // For safety in this demo, we check if we've 'seen' them via createUser
+       // or just allow it if not strict.
+       return true; 
     }
 
     try {
       const { resource } = await this.usersContainer.item(id, id).read();
       return Boolean(resource);
     } catch (error) {
-      console.error('Error checking user existence:', error);
       return false;
     }
   }
 
   async getRegisteredUsers(): Promise<number> {
     if (!this.usersContainer) {
-      console.warn('Users container not initialized. Cannot count registered users.');
-      return 0;
+      return this.localUserTokens.size;
     }
 
     try {
@@ -492,6 +495,41 @@ export class DbService {
       console.error('Error counting registered users:', error);
       return 0;
     }
+  }
+
+  // Update user with external API tokens (e.g., Uber)
+  async updateUserToken(userId: string, provider: string, tokenData: any): Promise<void> {
+    if (!this.usersContainer) {
+        const user = this.localUserTokens.get(userId) || { id: userId };
+        user[provider] = tokenData;
+        this.localUserTokens.set(userId, user);
+        return;
+    }
+
+    try {
+        const { resource: user } = await this.usersContainer.item(userId, userId).read();
+        if (user) {
+            user[provider] = tokenData;
+            await this.usersContainer.item(userId, userId).replace(user);
+        }
+    } catch (error) {
+        console.error(`Error updating token for user ${userId}:`, error);
+    }
+  }
+  
+  async getUserToken(userId: string, provider: string): Promise<any> {
+      if (!this.usersContainer) {
+          const user = this.localUserTokens.get(userId);
+          return user ? user[provider] : undefined;
+      }
+      
+      try {
+          const { resource: user } = await this.usersContainer.item(userId, userId).read();
+          return user ? user[provider] : undefined;
+      } catch (error) {
+          console.error(`Error getting token for user ${userId}:`, error);
+          return undefined;
+      }
   }
 
   // Initialize local data from JSON files

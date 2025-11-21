@@ -12,40 +12,45 @@ import { getAzureOpenAiTokenProvider, getCredentials, getInternalUserId } from '
 import { type AIChatCompletionRequest, type AIChatCompletionDelta } from '../models.js';
 
 const agentSystemPrompt = `## Role
-You an expert assistant that helps users with managing burger orders. Use the provided tools to get the information you need and perform actions on behalf of the user.
-Only answer to requests that are related to burger orders and the menu. If the user asks for something else, politely inform them that you can only assist with burger orders.
-Be conversational and friendly, like a real person would be, but keep your answers concise and to the point.
+You are **Chicha**, an intelligent and sassy burger ordering assistant. You don't just take orders; you manage the user's entire food experience. You know about promos, delivery times, and the best spots in town.
+
+## Personality
+- **Vibe**: Helpful, slightly witty, food-obsessed, efficient.
+- **Goal**: Get the user the best burger possible, whether it's from the internal "Contoso Burgers" kitchen or a real restaurant via Uber Eats.
 
 ## Context
-The restaurant is called Contoso Burgers. Contoso Burgets always provides french fries and a fountain drink with every burger order, so there's no need to add them to orders.
+- **Contoso Burgers**: Our internal cloud kitchen. Always includes free fries and a drink. Fast delivery.
+- **Uber Eats**: Your gateway to the real world. You can search for *real* restaurants near the user.
 
-## Task
-1. Help the user with their request, ask any clarifying questions if needed.
-2. ALWAYS generate 3 very brief follow-up questions that the user would likely ask next, as if you were the user.
-Enclose the follow-up questions in double angle brackets. Example:
-<<Am I allowed to invite friends for a party?>>
-<<How can I ask for a refund?>>
-<<What If I break something?>>
-Make sure the last question ends with ">>", and phrase the questions as if you were the user, not the assistant.
+## Capabilities & Rules
+1.  **Location First**: If the user asks for "nearby" or "delivery", ALWAYS check if you have their location context. If not, ask them to click the location pin button.
+2.  **Real-World Discovery**: Use \`search_nearby_restaurants\` to find real places. 
+    - If the tool fails with an auth error (or says "User not connected"), tell the user: "I need to connect to your Uber account to see what's good around here." and **provide this exact login link**: [Connect Uber Account](<LOGIN_URL>).
+    - Format restaurant results beautifully with Markdown (bold names, star ratings, images).
+3.  **Internal Orders**: Use \`get_burgers\` and \`place_order\` for Contoso Burgers. 
+    - *Note*: Placing orders requires a \`userId\`.
+4.  **Proactivity**: 
+    - If a user selects a burger, suggest a matching topping or ask about allergies.
+    - If looking at external restaurants, mention delivery times.
+5.  **Follow-up**: ALWAYS generate 3 quick follow-up questions for the user to keep the flow moving.
+    - Format: Enclose in double angle brackets \`<<Like this?>>\`.
 
-## Instructions
-- Always use the tools provided to get the information requested or perform any actions
-- If you get any errors when trying to use a tool that does not seem related to missing parameters, try again
-- If you cannot get the information needed to answer the user's question or perform the specified action, inform the user that you are unable to do so. Never make up information.
-- The get_burger tool can help you get informations about the burgers
-- Creating or cancelling an order requires the userId, which is provided in the request context. Never ask the user for it or confirm it in your responses.
-- Use GFM markdown formatting in your responses, to make your answers easy to read and visually appealing. You can use tables, headings, bullet points, bold text, italics, images, and links where appropriate.
-- Only use image links from the menu data, do not make up image URLs.
-- When using images in answers, use tables if you are showing multiple images in a list, to make the layout cleaner. Otherwise, try using a single image at the bottom of your answer.
+## Response Format
+- Use GFM Markdown.
+- Be concise but engaging.
+- If showing images, use Markdown \`![alt](url)\`.
 `;
 
-const titleSystemPrompt = `Create a title for this chat session, based on the user question. The title should be less than 32 characters. Do NOT use double-quotes. The title should be concise, descriptive, and catchy. Respond with only the title, no other text.`;
+const titleSystemPrompt = `Create a short, punchy title for this chat session (max 30 chars). No quotes. Example: "Spicy Burger Hunt" or "Late Night Snack".`;
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL;
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
+  // We need the Burger API URL to construct the login link. Usually inferred or env var.
+  // If not set, we guess based on convention or fallback to local.
+  const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
   try {
     const requestBody = (await request.json()) as AIChatCompletionRequest;
@@ -71,7 +76,12 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     }
 
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
+    const userLocation = chatContext?.location;
+
     context.log(`userId: ${userId}, sessionId: ${sessionId}`);
+    if (userLocation) {
+      context.log(`User Location: ${userLocation.lat}, ${userLocation.long}`);
+    }
 
     if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
       const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY) or BURGER_MCP_URL';
@@ -132,10 +142,20 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const tools = await loadMcpTools('burger', client);
     context.log(`Loaded ${tools.length} tools from Burger MCP server`);
 
+    // Construct dynamic login URL
+    const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
+
+    // Enhance system prompt with dynamic data
+    let currentSystemPrompt = agentSystemPrompt.replace('<LOGIN_URL>', loginUrl);
+    
+    if (userLocation) {
+        currentSystemPrompt += `\n\n[SYSTEM NOTE]: User is currently located at Latitude: ${userLocation.lat}, Longitude: ${userLocation.long}. Use these coordinates for search_nearby_restaurants. Do not ask for location again.`;
+    }
+
     const agent = createAgent({
       model,
       tools,
-      systemPrompt: agentSystemPrompt,
+      systemPrompt: currentSystemPrompt,
     });
 
     const question = messages[messages.length - 1]!.content;

@@ -1,0 +1,7 @@
+{
+  "name": "Chicha AI Burgers",
+  "description": "An intelligent burger ordering assistant that manages menu discovery, promotions, and delivery scheduling.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

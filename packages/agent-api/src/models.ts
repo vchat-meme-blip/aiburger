@@ -10,6 +10,10 @@ export type AIChatRole = 'user' | 'assistant' | 'system';
 export type AIChatContext = {
   currentStep?: AgentStep;
   intermediateSteps?: AgentStep[];
+  location?: {
+    lat: number;
+    long: number;
+  };
 };
 
 export type AIChatMessage = {

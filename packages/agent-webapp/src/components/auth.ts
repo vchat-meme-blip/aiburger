@@ -102,7 +102,7 @@ export class AuthComponent extends LitElement {
           <div class="badge">✨ AI-Powered Cravings</div>
           <h1>Hungry? Just Ask <span class="highlight">Chicha</span>.</h1>
           <p class="subtitle">The first AI Agent that finds promos, schedules deliveries, and manages your orders across Uber, DoorDash, and POS systems. Never miss a bite.</p>
-          
+
           <div class="social-proof">
             <div class="avatars">
               <div class="avatar" style="background-color: #FF6B6B">J</div>
@@ -119,7 +119,7 @@ export class AuthComponent extends LitElement {
             Order Now
           </button>
         </div>
-        
+
         <div class="hero-visual">
            <!-- A CSS-only abstract burger illustration -->
            <div class="abstract-burger">
@@ -182,7 +182,7 @@ export class AuthComponent extends LitElement {
           })}
         </div>
       </div>
-      
+
       <footer>
         <p>© 2025 Chicha AI. Serving bytes and bites.</p>
       </footer>
@@ -248,7 +248,7 @@ export class AuthComponent extends LitElement {
       width: 100%;
       height: 100%;
     }
-    
+
     /* Loading State */
     .loading-screen {
       display: flex;
@@ -363,7 +363,7 @@ export class AuthComponent extends LitElement {
       color: var(--azc-primary);
       position: relative;
     }
-    
+
     .highlight::after {
       content: '';
       position: absolute;
@@ -429,7 +429,7 @@ export class AuthComponent extends LitElement {
       margin-left: -10px;
     }
     .avatar:first-child { margin-left: 0; }
-    
+
     .rating {
       font-size: 0.9rem;
       font-weight: 600;
@@ -501,7 +501,7 @@ export class AuthComponent extends LitElement {
     }
     .card-1 { top: 20px; right: -20px; animation-delay: 0s; }
     .card-2 { bottom: 40px; left: -40px; animation-delay: 1.5s; }
-    
+
     @keyframes float {
       0% { transform: translateY(0px); }
       50% { transform: translateY(-10px); }
@@ -517,7 +517,7 @@ export class AuthComponent extends LitElement {
       max-width: 1200px;
       margin-bottom: 5rem;
     }
-    
+
     .feature-card {
       background: white;
       padding: 2rem;
@@ -556,7 +556,7 @@ export class AuthComponent extends LitElement {
       margin-bottom: 4rem;
       scroll-margin-top: 100px;
     }
-    
+
     .login-section h2 {
       margin: 0 0 0.5rem 0;
       font-size: 2rem;
@@ -621,4 +621,3 @@ declare global {
     'azc-auth': AuthComponent;
   }
 }
-    

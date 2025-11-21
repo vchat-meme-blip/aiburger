@@ -12,6 +12,8 @@ import questionSvg from '../../assets/icons/question.svg?raw';
 import newChatSvg from '../../assets/icons/new-chat.svg?raw';
 import './debug.js';
 
+const locationSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+
 export type ChatComponentState = {
   hasError: boolean;
   isLoading: boolean;
@@ -73,20 +75,11 @@ export const chatDefaultOptions: ChatComponentOptions = {
       get_order_by_id: 'Locating order...',
       place_order: 'Placing your delicious order...',
       delete_order_by_id: 'Cancelling order...',
+      search_nearby_restaurants: 'Checking Uber Eats for nearby spots...',
     },
   },
 };
 
-/**
- * A chat component that allows the user to ask questions and get answers from an API.
- * The component also displays default prompts that the user can click on to ask a question.
- * The component is built as a custom element that extends LitElement.
- *
- * Labels and other aspects are configurable via the `option` property.
- * @element azc-chat
- * @fires messagesUpdated - Fired when the message thread is updated
- * @fires stateChanged - Fired when the state of the component changes
- * */
 @customElement('azc-chat')
 export class ChatComponent extends LitElement {
   @property({
@@ -103,6 +96,10 @@ export class ChatComponent extends LitElement {
   @state() protected isLoading = false;
   @state() protected isStreaming = false;
   @state() protected currentStep: AgentStep | undefined;
+  @state() protected userLocation: { lat: number; long: number } | undefined;
+  @state() protected isGettingLocation = false;
+  @state() protected toastMessage: string | null = null;
+
   @query('.chat-container') protected chatContainerElement!: HTMLElement;
   @query('.messages') protected messagesElement!: HTMLElement;
   @query('.chat-input') protected chatInputElement!: HTMLElement;
@@ -110,6 +107,15 @@ export class ChatComponent extends LitElement {
   protected lastStepSetAt = 0;
   protected stepQueue: AgentStep[] = [];
   protected stepTimer: number | undefined;
+  protected toastTimer: number | undefined;
+
+  showToast(message: string) {
+    this.toastMessage = message;
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      this.toastMessage = null;
+    }, 3000);
+  }
 
   async onSuggestionClicked(suggestion: string) {
     this.question = suggestion;
@@ -123,14 +129,43 @@ export class ChatComponent extends LitElement {
   }
 
   async onKeyPressed(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       await this.onSendClicked();
     }
   }
 
+  async onLocationClicked() {
+    if (this.userLocation) {
+      this.userLocation = undefined;
+      this.showToast('📍 Location sharing disabled');
+      return;
+    }
+    this.isGettingLocation = true;
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          this.userLocation = {
+            lat: position.coords.latitude,
+            long: position.coords.longitude,
+          };
+          this.isGettingLocation = false;
+          this.showToast('📍 Location acquired! Ready to find food.');
+        },
+        (error) => {
+          console.error('Error getting location', error);
+          this.isGettingLocation = false;
+          this.showToast('⚠️ Could not get location. Check permissions.');
+        }
+      );
+    } else {
+      this.isGettingLocation = false;
+      this.showToast('⚠️ Geolocation not supported.');
+    }
+  }
+
   async onSendClicked(isRetry = false) {
-    if (this.isLoading) {
+    if (this.isLoading || (!this.question && !isRetry)) {
       return;
     }
 
@@ -162,6 +197,7 @@ export class ChatComponent extends LitElement {
         context: {
           userId: this.userId,
           sessionId: this.sessionId,
+          location: this.userLocation, 
         },
       });
       const { messages } = this;
@@ -178,8 +214,6 @@ export class ChatComponent extends LitElement {
           message.content += chunk.delta.content;
           this.messages = [...messages, message];
         } else if (chunk.delta.context?.intermediateSteps) {
-          // Only add intermediate steps when there is no content,
-          // otherwise they will be duplicated
           message.context!.intermediateSteps = [
             ...message.context!.intermediateSteps!,
             ...chunk.delta.context.intermediateSteps,
@@ -206,8 +240,6 @@ export class ChatComponent extends LitElement {
   }
 
   protected updateCurrentStep(step: AgentStep) {
-    // Make sure the step is displayed for a minimum time
-    // to avoid flickering
     const min = this.options.minStepDisplayMs ?? 500;
     const now = Date.now();
     const elapsed = now - this.lastStepSetAt;
@@ -218,7 +250,6 @@ export class ChatComponent extends LitElement {
       return;
     }
 
-    // Queue the step to be displayed later
     this.stepQueue.push(step);
     this.scheduleNextStep(min);
   }
@@ -245,11 +276,8 @@ export class ChatComponent extends LitElement {
   }
 
   override disconnectedCallback(): void {
-    if (this.stepTimer) {
-      clearTimeout(this.stepTimer);
-      this.stepTimer = undefined;
-    }
-
+    if (this.stepTimer) clearTimeout(this.stepTimer);
+    if (this.toastTimer) clearTimeout(this.toastTimer);
     this.stepQueue = [];
     super.disconnectedCallback();
   }
@@ -282,7 +310,6 @@ export class ChatComponent extends LitElement {
   }
 
   protected scrollToLastMessage() {
-    // Need to be delayed to run after the DOM refresh
     setTimeout(() => {
       const { bottom } = this.messagesElement.getBoundingClientRect();
       const { top } = this.chatInputElement.getBoundingClientRect();
@@ -293,23 +320,11 @@ export class ChatComponent extends LitElement {
   }
 
   protected getCurrentStepTitle() {
-    if (!this.currentStep) {
-      return '';
-    }
-
+    if (!this.currentStep) return '';
     switch (this.currentStep.type) {
-      case 'llm': {
-        return `Thinking...`;
-      }
-
-      case 'tool': {
-        // Map tool name to a user-friendly message
-        return `${this.options.strings.tools[this.currentStep.name] ?? this.currentStep.name}...`;
-      }
-
-      default: {
-        return '';
-      }
+      case 'llm': return `Thinking...`;
+      case 'tool': return `${this.options.strings.tools[this.currentStep.name] ?? this.currentStep.name}...`;
+      default: return '';
     }
   }
 
@@ -317,19 +332,11 @@ export class ChatComponent extends LitElement {
     <section class="suggestions-container">
       <h2>${this.options.strings.promptSuggestionsTitle}</h2>
       <div class="suggestions">
-        ${map(
-          suggestions,
-          (suggestion) => html`
-            <button
-              class="suggestion"
-              @click=${async () => {
-                await this.onSuggestionClicked(suggestion);
-              }}
-            >
+        ${map(suggestions, (suggestion) => html`
+            <button class="suggestion" @click=${async () => { await this.onSuggestionClicked(suggestion); }}>
               ${suggestion}
             </button>
-          `,
-        )}
+        `)}
       </div>
     </section>
   `;
@@ -377,19 +384,11 @@ export class ChatComponent extends LitElement {
           <div class="questions">
             <span class="question-icon" title=${this.options.strings.followUpQuestionsTitle}>
               ${unsafeSVG(questionSvg)} </span
-            >${map(
-              questions,
-              (question) => html`
-                <button
-                  class="question animation"
-                  @click=${async () => {
-                    await this.onSuggestionClicked(question);
-                  }}
-                >
+            >${map(questions, (question) => html`
+                <button class="question animation" @click=${async () => { await this.onSuggestionClicked(question); }}>
                   ${question}
                 </button>
-              `,
-            )}
+            `)}
           </div>
         `
       : nothing;
@@ -398,23 +397,28 @@ export class ChatComponent extends LitElement {
     <div class="chat-input">
       <button
         class="button new-chat-button"
-        @click=${() => {
-          this.onNewChatClicked();
-        }}
+        @click=${() => { this.onNewChatClicked(); }}
         title=${this.options.strings.newChatButton}
         .disabled=${this.messages?.length === 0 || this.isLoading || this.isStreaming}
       >
         ${unsafeSVG(newChatSvg)}
       </button>
       <form class="input-form">
+        <button
+          class="location-button ${this.userLocation ? 'active' : ''} ${this.isGettingLocation ? 'loading' : ''}"
+          type="button"
+          @click=${() => this.onLocationClicked()}
+          title="Share your location"
+          .disabled=${this.isLoading}
+        >
+          ${unsafeSVG(locationSvg)}
+        </button>
         <textarea
           class="text-input"
           placeholder="${this.options.strings.chatInputPlaceholder}"
           .value=${this.question}
           autocomplete="off"
-          @input=${(event) => {
-            this.question = (event.target as HTMLTextAreaElement).value;
-          }}
+          @input=${(event: any) => { this.question = (event.target as HTMLTextAreaElement).value; }}
           @keypress=${this.onKeyPressed}
           .disabled=${this.isLoading}
         ></textarea>
@@ -445,6 +449,10 @@ export class ChatComponent extends LitElement {
           ${this.renderFollowupQuestions(parsedMessages[parsedMessages.length - 1]?.followupQuestions ?? [])}
         </div>
         ${this.renderChatInput()}
+        
+        <div class="toast-notification ${this.toastMessage ? 'show' : ''}">
+            ${this.toastMessage}
+        </div>
       </section>
     `;
   }
@@ -760,7 +768,7 @@ export class ChatComponent extends LitElement {
       }
     }
     .button,
-    .submit-button {
+    .submit-button, .location-button {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -780,6 +788,28 @@ export class ChatComponent extends LitElement {
       padding: var(--space-xs);
       width: 36px;
       align-self: flex-end;
+    }
+    .location-button {
+      flex: 0 0 auto;
+      padding: var(--space-xs);
+      width: 36px;
+      height: 36px;
+      align-self: center;
+      color: var(--azc-text-subtle);
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+    .location-button.active {
+      color: var(--primary);
+      background-color: rgba(255, 87, 34, 0.1);
+    }
+    .location-button.loading {
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
     }
     .error {
       color: var(--error-color);

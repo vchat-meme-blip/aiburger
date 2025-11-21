@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 // Env file is located in the root of the repository
 dotenv.config({ path: path.join(__dirname, '../../../.env'), quiet: true });
 
-console.log('Setting Blob Storage service values...');
+console.log('Setting Service values...');
 const settings = {
   FUNCTIONS_WORKER_RUNTIME: 'node',
   AzureWebJobsFeatureFlags: 'EnableWorkerIndexing',
@@ -25,6 +25,11 @@ const settings = {
   AZURE_STORAGE_URL: process.env.AZURE_STORAGE_URL,
   AZURE_STORAGE_CONTAINER_NAME: process.env.AZURE_STORAGE_CONTAINER_NAME,
   AZURE_COSMOSDB_NOSQL_ENDPOINT: process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT,
+  // Uber API Config
+  UBER_CLIENT_ID: process.env.UBER_CLIENT_ID || '',
+  UBER_CLIENT_SECRET: process.env.UBER_CLIENT_SECRET || '',
+  UBER_REDIRECT_URI: process.env.UBER_REDIRECT_URI || 'http://localhost:7071/api/uber/callback',
+  UBER_WEBHOOK_SECRET: process.env.UBER_WEBHOOK_SECRET || '',
 };
 
 const settingsFilePath = path.join(__dirname, '../local.settings.json');
