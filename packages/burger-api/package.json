@@ -23,6 +23,7 @@
     "@azure/identity": "^4.8.0",
     "@azure/monitor-opentelemetry": "^1.14.0",
     "@azure/storage-blob": "^12.27.0",
+    "@azure/web-pubsub": "^1.1.1",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

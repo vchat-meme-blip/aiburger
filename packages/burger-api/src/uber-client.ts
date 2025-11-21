@@ -8,6 +8,31 @@ export interface UberTokenResponse {
   scope: string;
 }
 
+export interface UberStore {
+    id: string;
+    name: string;
+    rating: number;
+    eta: string;
+    delivery_fee: string;
+    image_url: string;
+    url: string;
+    promo?: string;
+    menu?: UberMenuItem[];
+}
+
+export interface UberMenuItem {
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    image_url?: string;
+    tags: string[];
+}
+
+export interface UberSearchResponse {
+    stores?: UberStore[];
+}
+
 export class UberClient {
   private clientId: string;
   private clientSecret: string;
@@ -88,7 +113,7 @@ export class UberClient {
     return (await response.json()) as UberTokenResponse;
   }
 
-  async searchRestaurants(accessToken: string, lat: number, long: number) {
+  async searchRestaurants(accessToken: string, lat: number, long: number): Promise<UberSearchResponse> {
     if (this.useMock || accessToken.startsWith('mock_')) {
         console.log(`[UberClient] Returning simulated restaurants for location: ${lat}, ${long}`);
         return this.getMockRestaurants();
@@ -110,46 +135,67 @@ export class UberClient {
        return this.getMockRestaurants();
     }
 
-    return await response.json();
+    return (await response.json()) as UberSearchResponse;
   }
 
-  private getMockRestaurants() {
+  // Enhanced mock data with menus for "Discovery Phase"
+  private getMockRestaurants(): UberSearchResponse {
       return {
           stores: [
               {
+                  id: "mock-store-1",
                   name: "Shake Shack (Simulated)",
                   rating: 4.8,
                   eta: "15-25",
                   delivery_fee: "$1.99",
                   image_url: "https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?auto=format&fit=crop&w=500&q=60",
                   url: "https://www.ubereats.com",
-                  promo: "Free Shake w/ Burger"
+                  promo: "Free Shake w/ Burger",
+                  menu: [
+                      { id: "ss-1", name: "ShackBurger", description: "Cheeseburger with lettuce, tomato, ShackSauce.", price: 8.99, tags: ["burger", "beef", "classic"] },
+                      { id: "ss-2", name: "Shroom Burger", description: "Crisp-fried portobello mushroom filled with melted muenster and cheddar cheeses.", price: 9.49, tags: ["vegetarian", "mushroom", "cheesy"] }
+                  ]
               },
               {
+                  id: "mock-store-2",
                   name: "Five Guys (Simulated)",
                   rating: 4.6,
                   eta: "20-35",
                   delivery_fee: "$0.49",
                   image_url: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?auto=format&fit=crop&w=500&q=60",
                   url: "https://www.ubereats.com",
-                  promo: "BOGO Fries"
+                  promo: "BOGO Fries",
+                  menu: [
+                      { id: "fg-1", name: "Bacon Cheeseburger", description: "Fresh patties, hotdog style bacon.", price: 11.99, tags: ["burger", "bacon", "heavy"] },
+                      { id: "fg-2", name: "Little Cajun Fries", description: "Fresh cut fries cooked in peanut oil with cajun spice.", price: 5.49, tags: ["fries", "spicy", "side"] }
+                  ]
               },
               {
+                  id: "mock-store-3",
                   name: "In-N-Out Burger (Simulated)",
                   rating: 4.9,
                   eta: "30-45",
                   delivery_fee: "$3.99",
                   image_url: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=500&q=60",
-                  url: "https://www.ubereats.com"
+                  url: "https://www.ubereats.com",
+                  menu: [
+                      { id: "io-1", name: "Double-Double", description: "Two beef patties, two slices of American cheese.", price: 6.50, tags: ["burger", "cheap", "classic"] },
+                      { id: "io-2", name: "Animal Style Fries", description: "Fries topped with cheese, spread, and grilled onions.", price: 4.50, tags: ["fries", "messy", "cheesy"] }
+                  ]
               },
               {
-                  name: "Burger King (Simulated)",
+                  id: "mock-store-4",
+                  name: "Spicy Dragon Wok (Simulated)",
                   rating: 4.2,
                   eta: "10-20",
                   delivery_fee: "$0.00",
-                  image_url: "https://images.unsplash.com/photo-1572802419224-296b0aeee0d9?auto=format&fit=crop&w=500&q=60",
+                  image_url: "https://images.unsplash.com/photo-1562967960-f55430ed5164?auto=format&fit=crop&w=500&q=60",
                   url: "https://www.ubereats.com",
-                  promo: "$0 Delivery Fee"
+                  promo: "$0 Delivery Fee",
+                  menu: [
+                      { id: "dw-1", name: "Szechuan Burger", description: "Spicy beef patty with chili oil and peppercorns.", price: 13.99, tags: ["spicy", "burger", "fusion"] },
+                      { id: "dw-2", name: "Mapo Tofu", description: "Spicy tofu with minced meat.", price: 12.99, tags: ["spicy", "tofu", "chinese"] }
+                  ]
               }
           ]
       };

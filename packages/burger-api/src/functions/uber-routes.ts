@@ -3,6 +3,14 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { UberClient } from '../uber-client.js';
 import { DbService } from '../db-service.js';
 import process from 'node:process';
+
+interface UberSearchResponse {
+    stores?: Array<{
+        id: string;
+        name: string;
+        // Add other properties as needed
+    }>;
+}
 import crypto from 'node:crypto';
 
 const uberClient = new UberClient();
@@ -149,16 +157,8 @@ app.http('uber-nearby', {
         }
 
         try {
-            interface UberSearchResponse {
-                stores?: Array<{
-                    id: string;
-                    name: string;
-                    // Add other properties as needed
-                }>;
-            }
-
             const results = (await uberClient.searchRestaurants(tokenData.access_token, lat, long)) as UberSearchResponse;
-            context.log(`Found ${results?.stores?.length ?? 0} restaurants for user ${userId}`);
+            context.log(`Found ${results.stores?.length ?? 0} restaurants for user ${userId}`);
             return { status: 200, jsonBody: results };
         } catch (err: any) {
             context.error('Uber Nearby Search Failed', err);

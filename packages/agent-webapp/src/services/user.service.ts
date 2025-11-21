@@ -1,5 +1,7 @@
+
 import { ChatComponent } from '../components/chat.js';
 import { HistoryComponent } from '../components/history.js';
+import { burgerApiBaseUrl } from './orders.service.js';
 
 // Chat and History components are defined in index.html
 // with their respective ids so we can access them here
@@ -44,4 +46,28 @@ export async function initUserSession() {
   } catch (error) {
     console.log('Error initializing user session:', error);
   }
+}
+
+// Wallet Functions
+export async function getWalletBalance(userId: string) {
+    try {
+        const res = await fetch(`${burgerApiBaseUrl}/api/wallet?userId=${userId}`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
+export async function depositFunds(userId: string, amount: number, type: 'crypto' | 'fiat' = 'crypto') {
+    try {
+        const res = await fetch(`${burgerApiBaseUrl}/api/wallet/deposit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, amount, type })
+        });
+        return await res.json();
+    } catch {
+        return null;
+    }
 }

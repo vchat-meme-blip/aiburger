@@ -1,5 +1,6 @@
 import { app, InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
+import { PubSubService } from '../pubsub-service.js';
 import { OrderStatus } from '../order.js';
 
 app.timer('orders-status-timer', {
@@ -8,9 +9,12 @@ app.timer('orders-status-timer', {
   async handler(_timer, context: InvocationContext) {
     context.log('Order status timer triggered');
     const db = await DbService.getInstance();
+    const pubSub = PubSubService.getInstance();
+    
     const startTime = Date.now();
     const now = new Date();
 
+    // --- Order Status Updates ---
     const allOrders = await db.getOrders();
     const orders = allOrders.filter((order) =>
       [OrderStatus.Pending, OrderStatus.InPreparation, OrderStatus.Ready].includes(order.status),
@@ -24,6 +28,7 @@ app.timer('orders-status-timer', {
           if (minutesSinceCreated > 3 || (minutesSinceCreated >= 1 && Math.random() < 0.5)) {
             updateTasks.push({
               orderId: order.id,
+              userId: order.userId,
               update: { status: OrderStatus.InPreparation },
               statusName: 'in-preparation',
             });
@@ -38,6 +43,7 @@ app.timer('orders-status-timer', {
           if (diffMinutes > 3 || (Math.abs(diffMinutes) <= 3 && Math.random() < 0.5)) {
             updateTasks.push({
               orderId: order.id,
+              userId: order.userId,
               update: { status: OrderStatus.Ready, readyAt: now.toISOString() },
               statusName: 'ready',
             });
@@ -53,6 +59,7 @@ app.timer('orders-status-timer', {
             if (minutesSinceReady >= 1 && (minutesSinceReady > 2 || Math.random() < 0.5)) {
               updateTasks.push({
                 orderId: order.id,
+                userId: order.userId,
                 update: { status: OrderStatus.Completed, completedAt: now.toISOString() },
                 statusName: 'completed',
               });
@@ -67,7 +74,13 @@ app.timer('orders-status-timer', {
 
     const updatePromises = updateTasks.map(async (task) => {
       try {
-        await db.updateOrder(task.orderId, task.update);
+        const updatedOrder = await db.updateOrder(task.orderId, task.update);
+        
+        if (updatedOrder) {
+            // Broadcast to the specific user
+            await pubSub.broadcastToUser(task.userId, 'order-update', updatedOrder);
+        }
+
         return { id: task.orderId, status: task.statusName, success: true };
       } catch (error) {
         context.error(`ERROR: Failed to update order ${task.orderId} to ${task.statusName}:`, error);
@@ -81,5 +94,19 @@ app.timer('orders-status-timer', {
     const failed = results.filter((r) => !r.success).length;
     const elapsedMs = Date.now() - startTime;
     context.log(`Order status updates: ${updated} orders updated, ${failed} failed (time elapsed: ${elapsedMs}ms)`);
+
+    // --- Lightning Deal Simulation ---
+    // 10% chance every tick to broadcast a flash deal to ALL connected users
+    if (Math.random() < 0.1) {
+        const deals = [
+            "⚡ FLASH DEAL: 50% OFF Spicy Jalapeño Burgers for the next 10 mins!",
+            "⚡ FREE DRINK with every order placed now!",
+            "⚡ Uber Eats Alert: Shake Shack free delivery just started."
+        ];
+        const randomDeal = deals[Math.floor(Math.random() * deals.length)];
+        context.log('Broadcasting Flash Deal:', randomDeal);
+        
+        await pubSub.broadcastToAll('flash-deal', { message: randomDeal });
+    }
   },
 });

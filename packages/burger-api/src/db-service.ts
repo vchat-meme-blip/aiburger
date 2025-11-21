@@ -4,7 +4,7 @@ import burgersData from '../data/burgers.json';
 import toppingsData from '../data/toppings.json';
 import { ToppingCategory, Topping } from './topping.js';
 import { Burger } from './burger.js';
-import { Order, OrderStatus } from './order.js';
+import { Order, OrderStatus, PaymentStatus } from './order.js';
 
 // Helper to strip properties starting with underscore from an object
 function stripUnderscoreProperties<T extends object>(object: T): T {
@@ -35,6 +35,11 @@ function stripUserId<T extends Order | Order[] | undefined>(orderOrOrders: T): T
   }
 
   return orderOrOrders;
+}
+
+export interface UserWallet {
+    balance: number;
+    cryptoBalance: number;
 }
 
 // Database service for our burger API using Azure Cosmos DB
@@ -434,7 +439,7 @@ export class DbService {
   async createUser(id: string, name: string): Promise<void> {
     if (!this.usersContainer) {
       console.warn('Users container not initialized. User creation skipped (local mode).');
-      this.localUserTokens.set(id, { id, name, createdAt: new Date().toISOString() });
+      this.localUserTokens.set(id, { id, name, createdAt: new Date().toISOString(), wallet: { balance: 0, cryptoBalance: 0 } });
       return;
     }
 
@@ -443,6 +448,7 @@ export class DbService {
         id,
         name,
         createdAt: new Date().toISOString(),
+        wallet: { balance: 0, cryptoBalance: 0 }
       });
     } catch (error) {
       // Ignore if user already exists
@@ -466,9 +472,6 @@ export class DbService {
 
   async userExists(id: string): Promise<boolean> {
     if (!this.usersContainer) {
-       // In local mode with no DB, we might default to true or check local cache.
-       // For safety in this demo, we check if we've 'seen' them via createUser
-       // or just allow it if not strict.
        return true; 
     }
 
@@ -500,7 +503,7 @@ export class DbService {
   // Update user with external API tokens (e.g., Uber)
   async updateUserToken(userId: string, provider: string, tokenData: any): Promise<void> {
     if (!this.usersContainer) {
-        const user = this.localUserTokens.get(userId) || { id: userId };
+        const user = this.localUserTokens.get(userId) || { id: userId, wallet: { balance: 0, cryptoBalance: 0 } };
         user[provider] = tokenData;
         this.localUserTokens.set(userId, user);
         return;
@@ -530,6 +533,86 @@ export class DbService {
           console.error(`Error getting token for user ${userId}:`, error);
           return undefined;
       }
+  }
+
+  // Wallet Methods
+  async getUserWallet(userId: string): Promise<UserWallet> {
+      if (!this.usersContainer) {
+          const user = this.localUserTokens.get(userId) || { id: userId, wallet: { balance: 0, cryptoBalance: 0 } };
+          this.localUserTokens.set(userId, user); // Ensure user exists in local map
+          return user.wallet || { balance: 0, cryptoBalance: 0 };
+      }
+
+      try {
+          const { resource: user } = await this.usersContainer.item(userId, userId).read();
+          return user?.wallet || { balance: 0, cryptoBalance: 0 };
+      } catch (error) {
+          console.error(`Error fetching wallet for user ${userId}:`, error);
+          return { balance: 0, cryptoBalance: 0 };
+      }
+  }
+
+  async updateUserWallet(userId: string, wallet: UserWallet): Promise<void> {
+      if (!this.usersContainer) {
+          const user = this.localUserTokens.get(userId);
+          if (user) {
+              user.wallet = wallet;
+              this.localUserTokens.set(userId, user);
+          }
+          return;
+      }
+
+      try {
+          const { resource: user } = await this.usersContainer.item(userId, userId).read();
+          if (user) {
+              user.wallet = wallet;
+              await this.usersContainer.item(userId, userId).replace(user);
+          }
+      } catch (error) {
+          console.error(`Error updating wallet for user ${userId}:`, error);
+          throw error;
+      }
+  }
+
+  async depositFunds(userId: string, amount: number, type: 'crypto' | 'fiat'): Promise<UserWallet> {
+      const wallet = await this.getUserWallet(userId);
+      
+      if (type === 'crypto') {
+          // Simulate conversion rate: 100 USD = 0.0015 BTC (roughly)
+          // Just keeping simple float math for demo
+          wallet.cryptoBalance += amount; 
+          // Auto-convert to fiat for settlement capability
+          wallet.balance += amount * 60000; // Assuming amount is BTC
+      } else {
+          wallet.balance += amount;
+      }
+
+      await this.updateUserWallet(userId, wallet);
+      return wallet;
+  }
+
+  async processPayment(userId: string, orderId: string): Promise<boolean> {
+      // 1. Get Order
+      const order = await this.getOrder(orderId, userId);
+      if (!order) throw new Error('Order not found');
+      if (order.paymentStatus === PaymentStatus.Paid) return true;
+
+      // 2. Get Wallet
+      const wallet = await this.getUserWallet(userId);
+
+      // 3. Check Balance
+      if (wallet.balance < order.totalPrice) {
+          throw new Error('Insufficient funds');
+      }
+
+      // 4. Deduct Funds
+      wallet.balance -= order.totalPrice;
+      await this.updateUserWallet(userId, wallet);
+
+      // 5. Update Order Status
+      await this.updateOrder(orderId, { paymentStatus: PaymentStatus.Paid });
+      
+      return true;
   }
 
   // Initialize local data from JSON files

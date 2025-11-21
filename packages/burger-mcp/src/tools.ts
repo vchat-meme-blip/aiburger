@@ -165,6 +165,84 @@ export const tools = [
       }
     },
   },
+  {
+      name: 'get_wallet_balance',
+      description: 'Check the current balance of the users wallet (requires userId).',
+      schema: z.object({
+          userId: z.string().describe('ID of the user'),
+      }),
+      async handler(args: { userId: string }) {
+          return fetchBurgerApi(`/api/wallet?userId=${args.userId}`);
+      }
+  },
+  {
+      name: 'pay_order',
+      description: 'Pay for a pending order using wallet balance (requires userId, orderId).',
+      schema: z.object({
+          userId: z.string().describe('ID of the user'),
+          orderId: z.string().describe('ID of the order to pay for'),
+      }),
+      async handler(args: { userId: string; orderId: string }) {
+          return fetchBurgerApi(`/api/orders/${args.orderId}/pay`, {
+              method: 'POST',
+              body: JSON.stringify({ userId: args.userId })
+          });
+      }
+  },
+  {
+      name: 'find_food_deals',
+      description: 'Search for food deals and specific items using semantic search. Use this when users ask for "spicy", "cheap", "vegan", etc.',
+      schema: z.object({
+          userId: z.string().optional().describe('ID of the user'),
+          query: z.string().describe('Natural language search query (e.g. "spicy wings under 15")'),
+          lat: z.number().optional().describe('Latitude for location context'),
+          long: z.number().optional().describe('Longitude for location context'),
+      }),
+      async handler(args: { userId: string; query: string; lat: number; long: number }) {
+          const params = new URLSearchParams({ q: args.query });
+          if (args.userId) params.append('userId', args.userId);
+          if (args.lat) params.append('lat', args.lat.toString());
+          if (args.long) params.append('long', args.long.toString());
+
+          try {
+              const resultJson = await fetchBurgerApi(`/api/discovery/search?${params.toString()}`);
+              const data = JSON.parse(resultJson);
+              
+              if (!data.results || data.results.length === 0) {
+                  return "No specific deals found fitting that description.";
+              }
+
+              // Format as Rich Cards
+              let html = `<div class="restaurant-grid">`;
+              for (const item of data.results) {
+                   html += `
+                   <div class="restaurant-card">
+                       <div class="card-image" style="background-image: url('${item.image_url}')">
+                          ${item.promo ? `<span class="promo-badge">${item.promo}</span>` : ''}
+                          ${item.type === 'internal' ? `<span class="promo-badge" style="background:#FF5722; right:10px; left:auto;">INTERNAL</span>` : ''}
+                       </div>
+                       <div class="card-details">
+                           <h4>${item.name}</h4>
+                           <div class="meta">
+                              <span>${item.source}</span>
+                              <span class="rating"><strong>$${item.price}</strong></span>
+                           </div>
+                           <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">${item.description}</p>
+                           ${item.type === 'internal' 
+                               ? `<button onclick="alert('Ask Chicha to order this ID: ${item.id}')" class="order-btn">Select Item</button>`
+                               : `<a href="${item.url}" target="_blank" class="order-btn">View on Uber Eats</a>`
+                           }
+                       </div>
+                   </div>`;
+              }
+              html += `</div>`;
+              return html;
+
+          } catch(e: any) {
+              return `Error searching for deals: ${e.message}`;
+          }
+      }
+  }
 ];
 
 // Wraps standard fetch to include the base URL and handle errors

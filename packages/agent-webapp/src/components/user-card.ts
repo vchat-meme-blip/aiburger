@@ -4,7 +4,7 @@ import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { customElement, state } from 'lit/decorators.js';
 import { getUserInfo } from '../services/auth.service.js';
-import { getUserId } from '../services/user.service.js';
+import { getUserId, getWalletBalance, depositFunds } from '../services/user.service.js';
 import { fetchOrders, type BurgerOrder } from '../services/orders.service.js';
 import copySvg from '../../assets/icons/copy.svg?raw';
 import burgerOutlineSvg from '../../assets/icons/burger-outline.svg?raw';
@@ -20,6 +20,9 @@ export class UserCard extends LitElement {
   @state() protected activeTab = 'identity'; // identity | orders | wallet
   @state() protected orders: BurgerOrder[] = [];
   @state() protected ordersLoading = false;
+  
+  @state() protected walletBalance = { balance: 0, cryptoBalance: 0 };
+  @state() protected walletLoading = false;
 
   constructor() {
     super();
@@ -31,6 +34,8 @@ export class UserCard extends LitElement {
     document.body.style.overflow = 'hidden';
     if(this.activeTab === 'orders') {
         this.loadOrders();
+    } else if(this.activeTab === 'wallet') {
+        this.loadWallet();
     }
   }
 
@@ -43,6 +48,8 @@ export class UserCard extends LitElement {
       this.activeTab = tab;
       if(tab === 'orders') {
           this.loadOrders();
+      } else if (tab === 'wallet') {
+          this.loadWallet();
       }
   }
 
@@ -131,6 +138,23 @@ export class UserCard extends LitElement {
         this.ordersLoading = false;
     }
   }
+  
+  protected async loadWallet() {
+      if(!this.userId) return;
+      this.walletLoading = true;
+      const wallet = await getWalletBalance(this.userId);
+      if(wallet) this.walletBalance = wallet;
+      this.walletLoading = false;
+  }
+  
+  protected async addFunds() {
+      if(!this.userId) return;
+      this.walletLoading = true;
+      // Simulate adding 0.0015 BTC (~$100)
+      const updated = await depositFunds(this.userId, 0.0015, 'crypto');
+      if(updated) this.walletBalance = updated;
+      this.walletLoading = false;
+  }
 
   protected renderIdentityTab = () => html`
     <div class="card card-shine">
@@ -183,30 +207,32 @@ export class UserCard extends LitElement {
   protected renderWalletTab = () => html`
     <div class="wallet-container">
         <h3>Chicha Wallet</h3>
-        <div class="wallet-card">
-             <div class="balance-section">
-                 <span class="label">Available Balance</span>
-                 <span class="balance">$0.00</span>
-                 <span class="sub-balance">0.000000 BTC</span>
-             </div>
-             <div class="wallet-actions">
-                 <button class="wallet-btn primary">Add Funds (Crypto)</button>
-                 <button class="wallet-btn">Add Card</button>
-             </div>
-        </div>
-
-        <div class="settlement-info">
-             <h4>Settlement Settings</h4>
-             <div class="setting-row">
-                 <span>Merchant</span>
-                 <strong>CoinGate Services</strong>
-             </div>
-             <div class="setting-row">
-                 <span>Auto-Conversion</span>
-                 <strong class="status-active">Enabled</strong>
-             </div>
-             <p class="info-text">Payments are processed via CoinGate and settled to Uber Eats in Fiat currency automatically.</p>
-        </div>
+        ${this.walletLoading ? html`<div class="spinner"></div>` : html`
+            <div class="wallet-card">
+                 <div class="balance-section">
+                     <span class="label">Available Balance</span>
+                     <span class="balance">$${this.walletBalance.balance.toFixed(2)}</span>
+                     <span class="sub-balance">${this.walletBalance.cryptoBalance.toFixed(6)} BTC</span>
+                 </div>
+                 <div class="wallet-actions">
+                     <button class="wallet-btn primary" @click=${this.addFunds}>Add Funds (Simulate)</button>
+                     <button class="wallet-btn">Manage Cards</button>
+                 </div>
+            </div>
+    
+            <div class="settlement-info">
+                 <h4>Settlement Settings</h4>
+                 <div class="setting-row">
+                     <span>Merchant</span>
+                     <strong>CoinGate Services</strong>
+                 </div>
+                 <div class="setting-row">
+                     <span>Auto-Conversion</span>
+                     <strong class="status-active">Enabled</strong>
+                 </div>
+                 <p class="info-text">Payments are processed via CoinGate and settled to Uber Eats in Fiat currency automatically.</p>
+            </div>
+        `}
     </div>
   `;
 

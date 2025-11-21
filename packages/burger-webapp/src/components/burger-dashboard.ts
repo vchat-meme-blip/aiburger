@@ -6,6 +6,12 @@ import { fetchOrders, type BurgerOrder } from '../orders.service.js';
 import burgerOutlineSvg from '../../assets/burger-outline.svg?raw';
 import burgerSvg from '../../assets/burger.svg?raw';
 
+// Ideally we would share the RealtimeService, but burger-webapp is a separate app.
+// For this demo, we'll rely on polling for the admin dashboard since real-time was
+// specifically requested for the User/Agent side (agent-webapp). 
+// IF we need it here, we'd duplicate the service or use a shared package.
+// Sticking to polling here for simplicity as the requirement focused on the Agent Experience.
+
 export const apiBaseUrl: string = import.meta.env.VITE_BURGER_API_URL || '';
 
 @customElement('burger-dashboard')

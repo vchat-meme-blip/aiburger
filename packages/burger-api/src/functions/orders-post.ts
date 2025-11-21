@@ -2,7 +2,8 @@
 import process from 'node:process';
 import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
-import { OrderStatus, type OrderItem } from '../order.js';
+import { PubSubService } from '../pubsub-service.js';
+import { OrderStatus, PaymentStatus, type OrderItem } from '../order.js';
 
 interface CreateOrderRequest {
   userId: string;
@@ -53,6 +54,7 @@ app.http('orders-post', {
 
     try {
       const dataService = await DbService.getInstance();
+      const pubSub = PubSubService.getInstance();
       const requestBody = (await request.json()) as CreateOrderRequest;
       context.log('Create Order Request for user:', requestBody.userId);
 
@@ -179,11 +181,16 @@ app.http('orders-post', {
         estimatedCompletionAt: estimatedCompletionAt.toISOString(),
         totalPrice,
         status: OrderStatus.Pending,
+        paymentStatus: PaymentStatus.Unpaid,
         nickname: requestBody.nickname,
         completedAt: undefined,
       });
 
       context.log(`Order created successfully: ${orderId}`);
+      
+      // Broadcast real-time event
+      await pubSub.broadcastToUser(requestBody.userId, 'order-created', order);
+
       return {
         status: 201,
         jsonBody: order,

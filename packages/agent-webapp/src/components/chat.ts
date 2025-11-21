@@ -7,6 +7,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { type ChatRequestOptions, getCompletion } from '../services/api.service.js';
 import type { AgentStep, AIChatMessage } from '../models.js';
 import { type ParsedMessage, parseMessageIntoHtml } from '../message-parser.js';
+import { RealtimeService } from '../services/realtime.service.js';
 import sendSvg from '../../assets/icons/send.svg?raw';
 import questionSvg from '../../assets/icons/question.svg?raw';
 import newChatSvg from '../../assets/icons/new-chat.svg?raw';
@@ -109,12 +110,29 @@ export class ChatComponent extends LitElement {
   protected stepTimer: number | undefined;
   protected toastTimer: number | undefined;
 
+  override async updated(changedProperties: Map<string, any>) {
+      super.updated(changedProperties);
+      if (changedProperties.has('userId') && this.userId) {
+          const realtime = RealtimeService.getInstance();
+          await realtime.connect(this.userId);
+          
+          realtime.on('order-created', (order: any) => {
+              this.showToast(`🎉 Order #${order.id.slice(-6)} Confirmed!`);
+          });
+          
+          realtime.on('order-update', (order: any) => {
+              const status = order.status.replace('-', ' ').toUpperCase();
+              this.showToast(`🚚 Order #${order.id.slice(-6)} update: ${status}`);
+          });
+      }
+  }
+
   showToast(message: string) {
     this.toastMessage = message;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => {
       this.toastMessage = null;
-    }, 3000);
+    }, 4000);
   }
 
   async onSuggestionClicked(suggestion: string) {
@@ -949,6 +967,34 @@ export class ChatComponent extends LitElement {
         right: 0;
       }
     }
+    
+    /* --- Toast Notifications --- */
+    .toast-notification {
+      position: fixed;
+      bottom: 100px; /* Higher than input */
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(33, 33, 33, 0.95);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 50px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    .toast-notification.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    
     @media (prefers-reduced-motion: reduce) {
       .animation {
         animation: none;
