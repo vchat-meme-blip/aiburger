@@ -3,8 +3,10 @@ import { defineConfig } from 'vite';
 
 // Expose environment variables to the client
 process.env.VITE_API_URL = process.env.AGENT_API_URL || process.env.AGENT_API_URL_OVERRIDE || '';
+process.env.VITE_BURGER_API_URL = process.env.BURGER_API_URL || 'http://localhost:7071';
 
 console.log(`Using chat API base URL: "${process.env.VITE_API_URL}"`);
+console.log(`Using burger API base URL: "${process.env.VITE_BURGER_API_URL}"`);
 
 export default defineConfig({
   build: {

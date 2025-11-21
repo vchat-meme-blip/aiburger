@@ -1,14 +1,19 @@
+
 import process from 'node:process';
 import { HttpRequest, HttpResponseInit, InvocationContext, app } from '@azure/functions';
 import { AzureCosmsosDBNoSQLChatMessageHistory } from '@langchain/azure-cosmosdb';
 import { getCredentials, getInternalUserId } from '../auth.js';
 
 async function getChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  context.log('Processing GET /chats request');
   const azureCosmosDbEndpoint = process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT;
   const { sessionId } = request.params;
+  
   const userId = await getInternalUserId(request);
+  context.log(`Resolved User ID: ${userId}`);
 
   if (!userId) {
+    context.warn('User ID missing in request');
     return {
       status: 400,
       jsonBody: {
@@ -60,7 +65,7 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
     return {
       status: 404,
       jsonBody: {
-        error: 'Session not found',
+        error: 'Session not found or database error',
       },
     };
   }

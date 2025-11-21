@@ -1,3 +1,4 @@
+
 import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
 
@@ -13,6 +14,9 @@ app.http('orders-get', {
     const userId = request.query.get('userId') ?? undefined;
     const statusParameter = request.query.get('status');
     const lastParameter = request.query.get('last');
+    
+    if (userId) context.log(`Filtering by userId: ${userId}`);
+    
     let statuses: string[] | undefined;
     if (statusParameter) {
       statuses = statusParameter.split(',').map((s) => s.trim().toLowerCase());
@@ -29,25 +33,34 @@ app.http('orders-get', {
       }
     }
 
-    const dataService = await DbService.getInstance();
-    const allOrders = await dataService.getOrders(userId);
+    try {
+        const dataService = await DbService.getInstance();
+        const allOrders = await dataService.getOrders(userId);
 
-    // Filter by status if provided
-    let filteredOrders = allOrders;
-    if (statuses && statuses.length > 0) {
-      filteredOrders = allOrders.filter((order) => statuses.includes(order.status));
+        // Filter by status if provided
+        let filteredOrders = allOrders;
+        if (statuses && statuses.length > 0) {
+        filteredOrders = allOrders.filter((order) => statuses.includes(order.status));
+        }
+
+        // Filter by time if provided
+        if (lastMs) {
+        const cutoffTime = new Date(Date.now() - lastMs);
+        filteredOrders = filteredOrders.filter((order) => new Date(order.createdAt) >= cutoffTime);
+        }
+
+        context.log(`Returning ${filteredOrders.length} orders`);
+        return {
+        jsonBody: filteredOrders,
+        status: 200,
+        };
+    } catch (error: any) {
+        context.error('Error fetching orders:', error);
+        return {
+            status: 500,
+            jsonBody: { error: error.message || 'Failed to fetch orders' }
+        };
     }
-
-    // Filter by time if provided
-    if (lastMs) {
-      const cutoffTime = new Date(Date.now() - lastMs);
-      filteredOrders = filteredOrders.filter((order) => new Date(order.createdAt) >= cutoffTime);
-    }
-
-    return {
-      jsonBody: filteredOrders,
-      status: 200,
-    };
   },
 });
 

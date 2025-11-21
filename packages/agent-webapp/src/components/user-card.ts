@@ -1,9 +1,11 @@
 
 import { LitElement, css, html, nothing } from 'lit';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
+import { repeat } from 'lit/directives/repeat.js';
 import { customElement, state } from 'lit/decorators.js';
 import { getUserInfo } from '../services/auth.service.js';
 import { getUserId } from '../services/user.service.js';
+import { fetchOrders, type BurgerOrder } from '../services/orders.service.js';
 import copySvg from '../../assets/icons/copy.svg?raw';
 import burgerOutlineSvg from '../../assets/icons/burger-outline.svg?raw';
 import cardSvg from '../../assets/icons/card.svg?raw';
@@ -15,6 +17,9 @@ export class UserCard extends LitElement {
   @state() protected hasError = false;
   @state() protected username = '';
   @state() protected isOpen = false;
+  @state() protected activeTab = 'identity'; // identity | orders | wallet
+  @state() protected orders: BurgerOrder[] = [];
+  @state() protected ordersLoading = false;
 
   constructor() {
     super();
@@ -24,11 +29,21 @@ export class UserCard extends LitElement {
   openModal() {
     this.isOpen = true;
     document.body.style.overflow = 'hidden';
+    if(this.activeTab === 'orders') {
+        this.loadOrders();
+    }
   }
 
   closeModal() {
     this.isOpen = false;
     document.body.style.overflow = '';
+  }
+
+  switchTab(tab: string) {
+      this.activeTab = tab;
+      if(tab === 'orders') {
+          this.loadOrders();
+      }
   }
 
   protected handleNavClick = () => {
@@ -81,10 +96,43 @@ export class UserCard extends LitElement {
     }
   };
 
-  protected renderError = () =>
-    html`<p class="message error">An error during while loading your membership details. Please retry later.</p>`;
+  protected getUserId = async () => {
+    this.isLoading = true;
+    this.hasError = false;
+    try {
+      const authDetails = await getUserInfo();
+      if (!authDetails) return;
+      this.username = authDetails.userDetails;
+      const id = await getUserId();
+      if (!id) {
+        throw new Error('Unable to retrieve user ID');
+      }
 
-  protected renderRegistrationCard = () => html`
+      this.userId = id;
+    } catch (error) {
+      console.error('Error fetching user ID:', error);
+      this.hasError = true;
+    } finally {
+      this.isLoading = false;
+    }
+  };
+
+  protected async loadOrders() {
+    if (!this.userId) return;
+    this.ordersLoading = true;
+    try {
+        const userOrders = await fetchOrders({ userId: this.userId });
+        if (userOrders) {
+            this.orders = userOrders.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        }
+    } catch (e) {
+        console.error("Failed to load orders", e);
+    } finally {
+        this.ordersLoading = false;
+    }
+  }
+
+  protected renderIdentityTab = () => html`
     <div class="card card-shine">
       <span class="burger">${unsafeSVG(burgerOutlineSvg)}</span>
       <div class="card-content">
@@ -110,43 +158,81 @@ export class UserCard extends LitElement {
     </div>
   `;
 
-  protected getUserId = async () => {
-    this.isLoading = true;
-    this.hasError = false;
-    try {
-      const authDetails = await getUserInfo();
-      if (!authDetails) return;
-      this.username = authDetails.userDetails;
-      const id = await getUserId();
-      if (!id) {
-        throw new Error('Unable to retrieve user ID');
-      }
+  protected renderOrdersTab = () => html`
+    <div class="orders-container">
+        <h3>Order History</h3>
+        ${this.ordersLoading ? html`<div class="spinner"></div>` : nothing}
+        ${!this.ordersLoading && this.orders.length === 0 ? html`<p class="empty-state">No orders found yet. Time to eat! 🍔</p>` : nothing}
+        <div class="order-list">
+            ${repeat(this.orders, (order) => order.id, (order) => html`
+                <div class="order-item">
+                    <div class="order-header">
+                        <span class="order-date">${new Date(order.createdAt).toLocaleDateString()} ${new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        <span class="order-status status-${order.status}">${order.status.replace('-', ' ')}</span>
+                    </div>
+                    <div class="order-items">
+                        ${order.items.length} Items • $${order.totalPrice.toFixed(2)}
+                    </div>
+                    <div class="order-id-small">#${order.id.slice(-6)}</div>
+                </div>
+            `)}
+        </div>
+    </div>
+  `;
 
-      this.userId = id;
-    } catch (error) {
-      console.error('Error fetching user ID:', error);
-      this.hasError = true;
-    } finally {
-      this.isLoading = false;
-    }
-  };
+  protected renderWalletTab = () => html`
+    <div class="wallet-container">
+        <h3>Chicha Wallet</h3>
+        <div class="wallet-card">
+             <div class="balance-section">
+                 <span class="label">Available Balance</span>
+                 <span class="balance">$0.00</span>
+                 <span class="sub-balance">0.000000 BTC</span>
+             </div>
+             <div class="wallet-actions">
+                 <button class="wallet-btn primary">Add Funds (Crypto)</button>
+                 <button class="wallet-btn">Add Card</button>
+             </div>
+        </div>
+
+        <div class="settlement-info">
+             <h4>Settlement Settings</h4>
+             <div class="setting-row">
+                 <span>Merchant</span>
+                 <strong>CoinGate Services</strong>
+             </div>
+             <div class="setting-row">
+                 <span>Auto-Conversion</span>
+                 <strong class="status-active">Enabled</strong>
+             </div>
+             <p class="info-text">Payments are processed via CoinGate and settled to Uber Eats in Fiat currency automatically.</p>
+        </div>
+    </div>
+  `;
 
   protected renderNavLink = () => html`
     <button @click="${this.handleNavClick}" class="member-card-link">
       <span class="card-icon">${unsafeSVG(cardSvg)}</span>
-      Member card
+      Dashboard
     </button>
   `;
 
   protected renderModal = () => html`
     <div class="modal-overlay" @click="${this.handleOverlayClick}">
       <div class="modal-content">
-        <button class="close-button" @click="${this.closeModal}" aria-label="Close modal">×</button>
-        ${this.isLoading
-          ? this.renderLoading()
-          : !this.username || this.hasError
-            ? this.renderError()
-            : this.renderRegistrationCard()}
+        <div class="modal-header">
+            <button class="close-button" @click="${this.closeModal}" aria-label="Close modal">×</button>
+            <div class="tabs">
+                <button class="tab ${this.activeTab === 'identity' ? 'active' : ''}" @click=${() => this.switchTab('identity')}>Identity</button>
+                <button class="tab ${this.activeTab === 'orders' ? 'active' : ''}" @click=${() => this.switchTab('orders')}>Orders</button>
+                <button class="tab ${this.activeTab === 'wallet' ? 'active' : ''}" @click=${() => this.switchTab('wallet')}>Wallet</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            ${this.activeTab === 'identity' ? (this.isLoading ? this.renderLoading() : this.renderIdentityTab()) : nothing}
+            ${this.activeTab === 'orders' ? this.renderOrdersTab() : nothing}
+            ${this.activeTab === 'wallet' ? this.renderWalletTab() : nothing}
+        </div>
       </div>
     </div>
   `;
@@ -159,11 +245,14 @@ export class UserCard extends LitElement {
     :host {
       --azc-primary: linear-gradient(135deg, #de471d 0%, #ff6b3d 100%);
       --azc-border-radius: 16px;
+      --azc-text-color: #333;
     }
+    
+    /* Nav Link Styles */
     .member-card-link {
       background: none;
       border: none;
-      color: #fff;
+      color: var(--azc-text-color); /* Ensure visibility on light navbar */
       text-decoration: none;
       padding: 0.5rem 1rem;
       border-radius: 4px;
@@ -174,14 +263,19 @@ export class UserCard extends LitElement {
       cursor: pointer;
       font-family: inherit;
       font-size: inherit;
+      font-weight: 500;
     }
     .member-card-link:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.05);
     }
     .card-icon {
       display: inline-block;
       fill: currentColor;
+      width: 20px;
+      height: 20px;
     }
+
+    /* Modal Styles */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -189,6 +283,7 @@ export class UserCard extends LitElement {
       right: 0;
       bottom: 0;
       background-color: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -198,34 +293,70 @@ export class UserCard extends LitElement {
     }
     .modal-content {
       position: relative;
-      max-width: 640px;
+      max-width: 700px;
       width: 100%;
+      height: 600px;
       max-height: 90vh;
-      background: var(--azc-primary);
-      border-radius: var(--azc-border-radius, 16px);
+      background: #F9F9F9;
+      border-radius: var(--azc-border-radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+        background: white;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
     }
     .close-button {
       position: absolute;
-      top: 1rem;
+      top: 50%;
       right: 1rem;
-      background: rgba(255, 255, 255, 0.2);
+      transform: translateY(-50%);
+      background: none;
       border: none;
-      border-radius: 50%;
-      width: 2.5rem;
-      height: 2.5rem;
-      font-size: 1.5rem;
-      font-weight: bold;
+      font-size: 2rem;
+      line-height: 1;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1001;
-      color: #fff;
-      transition: background 0.2s;
+      color: #666;
     }
-    .close-button:hover {
-      background: rgba(255, 255, 255, 0.4);
+    .close-button:hover { color: #333; }
+
+    .tabs {
+        display: flex;
+        gap: 1rem;
+        background: #f0f0f0;
+        padding: 4px;
+        border-radius: 8px;
     }
+    .tab {
+        background: none;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        color: #666;
+        transition: all 0.2s;
+    }
+    .tab.active {
+        background: white;
+        color: var(--azc-primary);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .modal-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+    }
+
+    /* Identity Card Styles */
     svg {
       fill: currentColor;
       width: 100%;
@@ -237,76 +368,49 @@ export class UserCard extends LitElement {
       font-weight: 600;
       text-transform: uppercase;
     }
-    h1,
-    h2 {
-      font-family: 'Sofia Sans Condensed', sans-serif;
-    }
-    h1,
-    h2,
-    pre,
-    .warning {
-      text-shadow: 0 1px 0px rgba(0, 0, 0, 0.5);
-    }
+    h1, h2 { font-family: 'Sofia Sans Condensed', sans-serif; }
+    h1, h2, pre, .warning { text-shadow: 0 1px 0px rgba(0, 0, 0, 0.5); }
+    
     .card {
       position: relative;
       background: var(--azc-primary);
       border-radius: var(--azc-border-radius);
       padding: 2rem;
-      box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.2),
-        -1px -1px 1px rgba(255, 255, 255, 0.3),
-        2px 4px 8px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 10px 30px rgba(222, 71, 29, 0.3);
       font-family: 'Sofia Sans Condensed', sans-serif;
       text-align: left;
       width: 100%;
       box-sizing: border-box;
       color: #fff;
       font-size: 1.2rem;
-
-      h2 {
+    }
+    .card h2 {
         font-size: 1em;
         margin: 0;
         font-weight: 600;
         font-style: italic;
         text-transform: uppercase;
-      }
-      pre {
+    }
+    .card pre {
         font-size: 1.5rem;
         font-weight: 600;
         margin: 0;
         white-space: normal;
         line-break: anywhere;
-      }
-      p {
-        margin: 1.5rem 0 0 0;
-      }
     }
+    .card p { margin: 1.5rem 0 0 0; }
+    
     .card-shine {
       --shine-deg: 45deg;
       position: relative;
       background-repeat: no-repeat;
-      background-position:
-        0% 0,
-        0 0;
-      background-image: linear-gradient(
-        var(--shine-deg),
-        transparent 20%,
-        transparent 45%,
-        #ffffff30 50%,
-        #ffffff30 51%,
-        transparent 56%,
-        transparent 100%
-      );
-      background-size:
-        250% 250%,
-        100% 100%;
+      background-position: 0% 0, 0 0;
+      background-image: linear-gradient(var(--shine-deg), transparent 20%, transparent 45%, #ffffff30 50%, #ffffff30 51%, transparent 56%, transparent 100%);
+      background-size: 250% 250%, 100% 100%;
       transition: background-position 1.5s ease;
     }
-    .card-shine:hover {
-      background-position:
-        90% 0,
-        0 0;
-    }
+    .card-shine:hover { background-position: 90% 0, 0 0; }
+    
     .burger {
       z-index: 1;
       width: 10rem;
@@ -340,9 +444,7 @@ export class UserCard extends LitElement {
       border-radius: 4px;
       transition: background 0.2s;
     }
-    .copy-button:hover {
-      background: #ffffff30;
-    }
+    .copy-button:hover { background: #ffffff30; }
     .copy-icon {
       width: 1.5rem;
       height: 1.5rem;
@@ -350,9 +452,109 @@ export class UserCard extends LitElement {
       vertical-align: middle;
       color: #fff;
     }
-    .message {
-      padding: 1em;
+
+    /* Orders Tab Styles */
+    .orders-container h3, .wallet-container h3 {
+        margin-top: 0;
+        color: #333;
+        border-bottom: 2px solid #FF5722;
+        padding-bottom: 0.5rem;
+        display: inline-block;
     }
+    .order-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .order-item {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .order-date { font-size: 0.85rem; color: #888; }
+    .order-status {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: #eee;
+        color: #555;
+    }
+    .status-pending { background: #FFF3E0; color: #E65100; }
+    .status-in-preparation { background: #E3F2FD; color: #1565C0; }
+    .status-ready { background: #E8F5E9; color: #2E7D32; }
+    .status-completed { background: #EEEEEE; color: #616161; }
+    
+    .order-items { font-weight: 600; font-size: 1.1rem; color: #333; }
+    .order-id-small { font-size: 0.8rem; color: #aaa; font-family: monospace; }
+    .empty-state { text-align: center; color: #888; margin-top: 2rem; font-style: italic; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0,0,0,0.1);
+      border-left-color: #FF5722;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 2rem auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Wallet Tab Styles */
+    .wallet-card {
+        background: linear-gradient(135deg, #1A1A1A 0%, #333 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+    }
+    .balance-section { display: flex; flex-direction: column; align-items: center; margin-bottom: 2rem; }
+    .balance-section .label { font-size: 0.9rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 1px; }
+    .balance-section .balance { font-size: 3rem; font-weight: 700; margin: 0.5rem 0; }
+    .balance-section .sub-balance { font-family: monospace; opacity: 0.5; }
+    
+    .wallet-actions { display: flex; gap: 1rem; justify-content: center; }
+    .wallet-btn {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .wallet-btn:hover { background: rgba(255,255,255,0.2); }
+    .wallet-btn.primary { background: #FF5722; border-color: #FF5722; }
+    .wallet-btn.primary:hover { background: #F4511E; }
+
+    .settlement-info {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid #eee;
+    }
+    .setting-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.8rem 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .status-active { color: #4CAF50; }
+    .info-text { font-size: 0.85rem; color: #888; margin-top: 1rem; line-height: 1.5; }
+
     .visually-hidden {
       position: absolute;
       width: 1px;
@@ -364,10 +566,4 @@ export class UserCard extends LitElement {
       border: 0;
     }
   `;
-}
-
-declare global {
-  interface HTMLElementTagNameMap {
-    'azc-user-card': UserCard;
-  }
 }

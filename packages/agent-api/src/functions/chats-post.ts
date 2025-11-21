@@ -46,30 +46,32 @@ You are **Chicha**, an intelligent and sassy burger ordering assistant. You don'
 const titleSystemPrompt = `Create a short, punchy title for this chat session (max 30 chars). No quotes. Example: "Spicy Burger Hunt" or "Late Night Snack".`;
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  context.log('Processing POST /chats/stream request');
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
-  // Check both standard OPENAI_API_KEY and AZURE_OPENAI_API_KEY (which user might have set with a standard key)
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
-  // Check both base URL vars
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
   
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
-  // We need the Burger API URL to construct the login link. Usually inferred or env var.
-  // If not set, we guess based on convention or fallback to local.
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
   try {
     const requestBody = (await request.json()) as AIChatCompletionRequest;
     const { messages, context: chatContext } = requestBody;
 
+    // Debugging: Log incoming user details
+    context.log('Resolving user ID...');
     const userId = await getInternalUserId(request, requestBody);
+    
     if (!userId) {
+      context.warn('Failed to resolve user ID from request or auth headers');
       return {
         status: 400,
         jsonBody: {
-          error: 'Invalid or missing userId in the request',
+          error: 'Invalid or missing userId in the request. Please ensure you are logged in.',
         },
       };
     }
+    context.log(`User resolved: ${userId}`);
 
     if (messages?.length === 0 || !messages[messages.length - 1]?.content) {
       return {
@@ -83,12 +85,11 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
     const userLocation = chatContext?.location;
 
-    context.log(`userId: ${userId}, sessionId: ${sessionId}`);
+    context.log(`Starting session: ${sessionId} for user: ${userId}`);
     if (userLocation) {
       context.log(`User Location: ${userLocation.lat}, ${userLocation.long}`);
     }
 
-    // Ensure we have some way to connect to an LLM
     if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
       const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY/AZURE_OPENAI_API_KEY) or BURGER_MCP_URL';
       context.error(errorMessage);
@@ -102,14 +103,10 @@ export async function postChats(request: HttpRequest, context: InvocationContext
 
     let model: ChatOpenAI;
 
-    // Priority: 1. OPENAI_MODEL, 2. AZURE_OPENAI_MODEL, 3. Default 'gpt-4o-mini'
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
 
-    // Logic: If an API Key is provided (standard OpenAI style), use it.
-    // Otherwise assume Azure OpenAI Managed Identity.
     if (openAiApiKey) {
-      // Standard OpenAI or compatible endpoint
-      context.log('Using Standard OpenAI (or compatible) via API Key');
+      context.log(`Using Standard OpenAI (or compatible) via API Key with model: ${modelName}`);
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
@@ -117,8 +114,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
-      // Azure OpenAI with Managed Identity
-      context.log('Using Azure OpenAI via Managed Identity');
+      context.log(`Using Azure OpenAI via Managed Identity with model: ${modelName}`);
       model = new ChatOpenAI({
         configuration: {
           baseURL: azureOpenAiEndpoint,
@@ -155,10 +151,8 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const tools = await loadMcpTools('burger', client);
     context.log(`Loaded ${tools.length} tools from Burger MCP server`);
 
-    // Construct dynamic login URL
     const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
 
-    // Enhance system prompt with dynamic data
     let currentSystemPrompt = agentSystemPrompt.replace('<LOGIN_URL>', loginUrl);
     
     if (userLocation) {
@@ -173,9 +167,8 @@ export async function postChats(request: HttpRequest, context: InvocationContext
 
     const question = messages[messages.length - 1]!.content;
     const previousMessages = await chatHistory.getMessages();
-    context.log(`Previous messages in history: ${previousMessages.length}`);
+    context.log(`History length: ${previousMessages.length} messages`);
 
-    // Start the agent and stream the response events
     const responseStream = agent.streamEvents(
       {
         messages: [['human', `userId: ${userId}`], ...previousMessages, ['human', question]],
@@ -186,7 +179,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       },
     );
 
-    // Create a short title for this chat session
     const generateSessionTitle = async () => {
       const { title } = await chatHistory.getContext();
       if (!title) {
@@ -194,29 +186,21 @@ export async function postChats(request: HttpRequest, context: InvocationContext
           ['system', titleSystemPrompt],
           ['human', question],
         ]);
-        context.log(`Title for session: ${response.text}`);
+        context.log(`Generated title: ${response.text}`);
         chatHistory.setContext({ title: response.text });
       }
     };
 
-    // We don't await this yet, to allow parallel execution.
-    // We'll await it later, after the response is fully sent.
     const sessionTitlePromise = generateSessionTitle();
 
-    // Update chat history when the response is complete
     const onResponseComplete = async (content: string) => {
       try {
         if (content) {
-          // When no content is generated, do not update the history as it's likely an error
           await chatHistory.addMessage(new HumanMessage(question));
           await chatHistory.addMessage(new AIMessage(content));
-          context.log('Chat history updated successfully');
-
-          // Ensure the session title has finished generating
+          context.log('Chat history updated');
           await sessionTitlePromise;
         }
-
-        // Close MCP client connection
         await client.close();
       } catch (error) {
         context.error('Error after response completion:', error);
@@ -227,8 +211,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
 
     return {
       headers: {
-        // This content type is needed for streaming responses
-        // when using a SWA linked backend API
         'Content-Type': 'text/event-stream',
         'Transfer-Encoding': 'chunked',
       },
@@ -236,18 +218,17 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     };
   } catch (_error: unknown) {
     const error = _error as Error;
-    context.error(`Error when processing chat-post request: ${error.message}`);
+    context.error(`Error processing chat-post request: ${error.message}`, error.stack);
 
     return {
       status: 500,
       jsonBody: {
-        error: 'Internal server error while processing the request',
+        error: `Internal server error: ${error.message}`,
       },
     };
   }
 }
 
-// Transform the response chunks into a JSON stream
 async function* createJsonStream(
   chunks: AsyncIterable<StreamEvent>,
   sessionId: string,
@@ -258,11 +239,9 @@ async function* createJsonStream(
     let responseChunk: AIChatCompletionDelta | undefined;
 
     if (chunk.event === 'on_chat_model_end' && data.output?.content.length > 0) {
-      // End of our agentic chain
       const content = data?.output.content[0].text ?? data.output.content ?? '';
       await onComplete(content);
     } else if (chunk.event === 'on_chat_model_stream' && data.chunk.content.length > 0) {
-      // Streaming response from the LLM
       responseChunk = {
         delta: {
           content: data.chunk.content[0].text ?? data.chunk.content,
@@ -270,7 +249,6 @@ async function* createJsonStream(
         },
       };
     } else if (chunk.event === 'on_chat_model_end') {
-      // Intermediate LLM response (no content)
       responseChunk = {
         delta: {
           context: {
@@ -289,7 +267,6 @@ async function* createJsonStream(
         },
       };
     } else if (chunk.event === 'on_tool_end') {
-      // Tool call completed
       responseChunk = {
         delta: {
           context: {
@@ -305,7 +282,6 @@ async function* createJsonStream(
         },
       };
     } else if (chunk.event === 'on_chat_model_start') {
-      // Start of a new LLM call
       responseChunk = {
         delta: {
           context: {
@@ -319,7 +295,6 @@ async function* createJsonStream(
         context: { sessionId },
       };
     } else if (chunk.event === 'on_tool_start') {
-      // Start of a new tool call
       responseChunk = {
         delta: {
           context: {
@@ -337,8 +312,6 @@ async function* createJsonStream(
       continue;
     }
 
-    // Format response chunks in Newline delimited JSON
-    // see https://github.com/ndjson/ndjson-spec
     yield JSON.stringify(responseChunk) + '\n';
   }
 }

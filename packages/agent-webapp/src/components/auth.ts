@@ -275,6 +275,7 @@ export class AuthComponent extends LitElement {
       align-items: center;
       font-size: 0.9rem;
       font-weight: 500;
+      color: var(--azc-text-color);
     }
     .login-icon {
       width: 24px;
@@ -283,16 +284,20 @@ export class AuthComponent extends LitElement {
     }
     .logout {
       background: none;
-      border: none;
+      border: 1px solid transparent;
       cursor: pointer;
       padding: 4px;
       border-radius: 50%;
-      color: var(--azc-text-subtle);
+      color: var(--azc-text-color);
       transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .logout:hover {
       background: rgba(0,0,0,0.05);
       color: var(--azc-primary);
+      border-color: rgba(0,0,0,0.1);
     }
 
     /* --- Landing Page Styles --- */

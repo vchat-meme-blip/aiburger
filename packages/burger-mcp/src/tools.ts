@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 import { burgerApiUrl } from './config.js';
 
@@ -155,7 +156,11 @@ export const tools = [
          }
 
       } catch (e: any) {
-         // Return the error as text so the agent can explain it
+         // Better error handling for LLM
+         console.error("Search Tool Error:", e);
+         if (e.message && e.message.includes("401")) {
+             return "User not connected. Please ask the user to connect their Uber account.";
+         }
          return `Error searching: ${e.message || e}`;
       }
     },
@@ -165,7 +170,7 @@ export const tools = [
 // Wraps standard fetch to include the base URL and handle errors
 async function fetchBurgerApi(url: string, options: RequestInit = {}): Promise<string> {
   const fullUrl = new URL(url, burgerApiUrl).toString();
-  console.error(`Fetching ${fullUrl}`);
+  console.log(`[MCP] Fetching ${fullUrl}`);
   try {
     const response = await fetch(fullUrl, {
       ...options,
@@ -175,8 +180,11 @@ async function fetchBurgerApi(url: string, options: RequestInit = {}): Promise<s
         Accept: 'application/json',
       },
     });
+    
     if (!response.ok) {
       const errorBody = await response.text();
+      console.error(`[MCP] API Error (${response.status}):`, errorBody);
+      
       try {
          const jsonError = JSON.parse(errorBody);
          throw new Error(jsonError.error || jsonError.message || response.statusText);
@@ -191,7 +199,7 @@ async function fetchBurgerApi(url: string, options: RequestInit = {}): Promise<s
 
     return JSON.stringify(await response.json());
   } catch (error: any) {
-    console.error(`Error fetching ${fullUrl}:`, error);
+    console.error(`[MCP] Execution Error for ${fullUrl}:`, error);
     throw error;
   }
 }

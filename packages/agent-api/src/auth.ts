@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { HttpRequest } from '@azure/functions';
 import { DefaultAzureCredential, getBearerTokenProvider } from '@azure/identity';
 import { UserDbService } from './user-db-service.js';
@@ -35,10 +36,14 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
   // Get the user ID from Azure easy auth if it's available,
   const authUserId = getAuthenticationUserId(request);
+  
   if (authUserId) {
     // Exchange the auth user ID to the internal user ID
+    // NOTE: We must hash it to match how it is stored in me-get.ts
+    const id = createHash('sha256').update(authUserId).digest('hex').slice(0, 32);
+    
     const db = await UserDbService.getInstance();
-    const user = await db.getUserById(authUserId);
+    const user = await db.getUserById(id);
     if (user) {
       return user.id;
     }

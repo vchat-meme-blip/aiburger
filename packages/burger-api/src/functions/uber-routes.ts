@@ -1,3 +1,4 @@
+
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { UberClient } from '../uber-client.js';
 import { DbService } from '../db-service.js';
@@ -11,7 +12,8 @@ app.http('uber-login', {
     methods: ['GET'],
     authLevel: 'anonymous',
     route: 'uber/login',
-    handler: async (request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> => {
+    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        context.log('Uber Login Initiated');
         const userId = request.query.get('userId');
         if (!userId) {
             return { status: 400, body: 'Missing userId' };
@@ -19,6 +21,7 @@ app.http('uber-login', {
         // Pass userId as state to retrieve it in the callback
         const loginUrl = uberClient.getLoginUrl(userId);
         
+        context.log(`Redirecting to Uber Auth URL for user: ${userId}`);
         return {
             status: 302,
             headers: { Location: loginUrl }
@@ -32,15 +35,18 @@ app.http('uber-callback', {
     authLevel: 'anonymous',
     route: 'uber/callback',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        context.log('Uber Callback Received');
         const code = request.query.get('code');
         const userId = request.query.get('state'); // We passed userId as state
         const error = request.query.get('error');
 
         if (error) {
+            context.error(`Uber Auth Error Param: ${error}`);
             return { status: 400, body: `Uber Auth Error: ${error}` };
         }
 
         if (!code || !userId) {
+            context.error('Missing code or state in callback');
             return { status: 400, body: 'Missing code or state (userId)' };
         }
 
@@ -56,11 +62,12 @@ app.http('uber-callback', {
             };
             
             await db.updateUserToken(userId, 'uber', tokenWithTimestamp);
+            context.log(`Uber token saved successfully for user: ${userId}`);
 
             return {
                 status: 200,
                 headers: { 'Content-Type': 'text/html' },
-                body: `<html><body><h1>Uber Connected Successfully!</h1><p>You can now close this window and return to the chat.</p><script>window.close()</script></body></html>`
+                body: `<html><body><h1>Uber Connected Successfully!</h1><p>You can now close this window and return to the chat.</p><script>setTimeout(() => window.close(), 1500)</script></body></html>`
             };
         } catch (err: any) {
             context.error('Uber Callback Failed', err);
@@ -137,11 +144,13 @@ app.http('uber-nearby', {
         const tokenData = await db.getUserToken(userId, 'uber');
 
         if (!tokenData || !tokenData.access_token) {
+            context.warn(`User ${userId} tried to search but is not connected to Uber.`);
             return { status: 401, jsonBody: { error: 'User not connected to Uber. Please login first.' } };
         }
 
         try {
             const results = await uberClient.searchRestaurants(tokenData.access_token, lat, long);
+            context.log(`Found ${results.stores ? results.stores.length : 0} restaurants for user ${userId}`);
             return { status: 200, jsonBody: results };
         } catch (err: any) {
             context.error('Uber Nearby Search Failed', err);

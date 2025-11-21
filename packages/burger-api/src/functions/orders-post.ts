@@ -1,3 +1,4 @@
+
 import process from 'node:process';
 import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
@@ -53,7 +54,7 @@ app.http('orders-post', {
     try {
       const dataService = await DbService.getInstance();
       const requestBody = (await request.json()) as CreateOrderRequest;
-      context.log('Request body:', requestBody);
+      context.log('Create Order Request for user:', requestBody.userId);
 
       // Validate userId is provided
       if (!requestBody.userId) {
@@ -66,6 +67,7 @@ app.http('orders-post', {
       // Check if userId exists in the database
       const userExists = await dataService.userExists(requestBody.userId);
       if (!userExists) {
+        context.warn(`User ID ${requestBody.userId} not found in registry.`);
         const registrationUrl = process.env.AGENT_WEBAPP_URL ?? '<unspecified>';
         return {
           status: 401,
@@ -181,6 +183,7 @@ app.http('orders-post', {
         completedAt: undefined,
       });
 
+      context.log(`Order created successfully: ${orderId}`);
       return {
         status: 201,
         jsonBody: order,

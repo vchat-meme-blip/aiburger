@@ -72,6 +72,9 @@ export class HistoryComponent extends LitElement {
     try {
       this.isLoading = true;
       const response = await fetch(`${this.getApiUrl()}/api/chats/${sessionId}/?userId=${this.userId}`);
+      if (!response.ok) {
+          throw new Error(`Failed to load chat: ${response.statusText}`);
+      }
       const messages = await response.json();
       const loadSessionEvent = new CustomEvent('loadSession', {
         detail: { id: sessionId, messages },
@@ -146,13 +149,23 @@ export class HistoryComponent extends LitElement {
     this.hasError = false;
     try {
       const response = await fetch(`${this.getApiUrl()}/api/chats?userId=${this.userId}`);
+      
+      if (!response.ok) {
+          throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+      
       const chats = await response.json();
+      
+      if (!Array.isArray(chats)) {
+          throw new Error('Invalid response format: expected an array of chats');
+      }
+      
       this.chats = chats;
       this.isLoading = false;
     } catch (error) {
       this.hasError = true;
       this.isLoading = false;
-      console.error(error);
+      console.error('Failed to refresh history:', error);
     }
   }
 
