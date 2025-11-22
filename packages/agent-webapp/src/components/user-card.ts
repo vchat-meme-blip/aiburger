@@ -304,7 +304,7 @@ export class UserCard extends LitElement {
       height: 20px;
     }
 
-    /* Modal Styles - Centering Fix */
+    /* Modal Styles - Centering Fix and Contrast */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -330,8 +330,7 @@ export class UserCard extends LitElement {
       overflow: hidden;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
       color: #333;
-      /* Center the modal content if flex fails */
-      margin: 0 auto;
+      margin: auto;
     }
     .modal-header {
         background: white;

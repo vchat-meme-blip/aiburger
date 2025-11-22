@@ -10,9 +10,6 @@ const azureOpenAiScope = 'https://cognitiveservices.azure.com/.default';
 let credentials: DefaultAzureCredential | undefined;
 
 export function getCredentials(): DefaultAzureCredential {
-  // Use the current user identity to authenticate.
-  // No secrets needed, it uses `az login` or `azd auth login` locally,
-  // and managed identity when deployed on Azure.
   credentials ||= new DefaultAzureCredential();
   return credentials;
 }
@@ -22,39 +19,57 @@ export function getAzureOpenAiTokenProvider() {
 }
 
 export function getAuthenticationUserId(request: HttpRequest): string | undefined {
-  let userId: string | undefined;
-
-  // Get the user ID from Azure easy auth
   try {
-    const token = Buffer.from(request.headers.get('x-ms-client-principal') ?? '', 'base64').toString('ascii');
-    const infos = token && JSON.parse(token);
-    userId = infos?.userId;
-  } catch {}
-
-  return userId;
+    const header = request.headers.get('x-ms-client-principal');
+    if (header) {
+        const token = Buffer.from(header, 'base64').toString('ascii');
+        const infos = token && JSON.parse(token);
+        return infos?.userId;
+    }
+  } catch (error) {
+      console.error('Error parsing x-ms-client-principal header:', error);
+  }
+  return undefined;
 }
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
-  // Get the user ID from Azure easy auth if it's available
+  // Debug: Log all potential sources of ID
+  const queryId = request.query.get('userId');
+  const bodyId = body?.context?.userId;
   const authUserId = getAuthenticationUserId(request);
   
+  console.log(`[Auth] Resolution - Headers: ${!!authUserId}, Query: ${queryId}, Body: ${bodyId}`);
+
+  // 1. Preference: SWA Auth Header
   if (authUserId) {
-    // Exchange the auth user ID to the internal user ID
-    // NOTE: We must hash it to match how it is stored in me-get.ts
     const id = createHash('sha256').update(authUserId).digest('hex').slice(0, 32);
-    
-    const db = await UserDbService.getInstance();
-    const user = await db.getUserById(id);
-    if (user) {
-      return user.id;
+    try {
+        const db = await UserDbService.getInstance();
+        const user = await db.getUserById(id);
+        if (user) {
+            return user.id;
+        }
+        // If user doesn't exist in DB yet (me-get not called), still return the hash
+        // so the agent can work with it.
+        return id;
+    } catch (e) {
+        console.warn(`[Auth] DB lookup failed for ${id}, continuing with hashed ID.`, e);
+        return id;
     }
-    // If we have a valid auth user ID but no DB record, we return the hash
-    // The me-get endpoint will create the record lazily if needed, 
-    // but this ensures downstream functions get the correct ID format immediately.
-    return id;
   }
 
-  // Get the user ID from the request as a fallback
-  const fallbackId = body?.context?.userId ?? request.query.get('userId') ?? undefined;
-  return fallbackId;
+  // 2. Fallback: Query Parameter (High Priority for Dev/Hybrid)
+  if (queryId) {
+      console.log(`[Auth] Using query parameter userId: ${queryId}`);
+      return queryId;
+  }
+
+  // 3. Fallback: Body Parameter
+  if (bodyId) {
+      console.log(`[Auth] Using body context userId: ${bodyId}`);
+      return bodyId;
+  }
+
+  console.warn('[Auth] No userId found in request.');
+  return undefined;
 }

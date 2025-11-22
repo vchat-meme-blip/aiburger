@@ -17,8 +17,13 @@
   --azc-font-display: 'Sofia Sans Condensed', sans-serif;
 
   /* Navigation Colors */
-  --azc-nav-bg: rgba(255, 255, 255, 0.95);
-  --azc-nav-text: #212121;
+  --azc-nav-bg: rgba(255, 255, 255, 0.98);
+  --azc-nav-text: #000000; /* Enforced Black for visibility */
+  
+  /* Modal Specifics */
+  --azc-modal-overlay: rgba(0, 0, 0, 0.75);
+  --azc-modal-bg: #F9F9F9;
+  --azc-modal-text: #333333;
 }
 
 html,

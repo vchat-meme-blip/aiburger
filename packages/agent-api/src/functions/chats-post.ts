@@ -46,7 +46,7 @@ You are **Chicha**, an intelligent and sassy burger ordering assistant. You don'
 const titleSystemPrompt = `Create a short, punchy title for this chat session (max 30 chars). No quotes. Example: "Spicy Burger Hunt" or "Late Night Snack".`;
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-  context.log('Processing POST /chats/stream request');
+  context.log('[chats-post] Processing POST request');
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
@@ -58,12 +58,12 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const requestBody = (await request.json()) as AIChatCompletionRequest;
     const { messages, context: chatContext } = requestBody;
 
-    // Debugging: Log incoming user details
-    context.log('Resolving user ID...');
+    context.log('[chats-post] Resolving user ID...');
     const userId = await getInternalUserId(request, requestBody);
+    context.log(`[chats-post] User resolved: ${userId}`);
     
     if (!userId) {
-      context.warn('Failed to resolve user ID from request or auth headers');
+      context.warn('[chats-post] Failed to resolve user ID.');
       return {
         status: 400,
         jsonBody: {
@@ -71,7 +71,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         },
       };
     }
-    context.log(`User resolved: ${userId}`);
 
     if (messages?.length === 0 || !messages[messages.length - 1]?.content) {
       return {
@@ -85,10 +84,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
     const userLocation = chatContext?.location;
 
-    context.log(`Starting session: ${sessionId} for user: ${userId}`);
-    if (userLocation) {
-      context.log(`User Location: ${userLocation.lat}, ${userLocation.long}`);
-    }
+    context.log(`[chats-post] Session: ${sessionId}, Location: ${userLocation ? 'Yes' : 'No'}`);
 
     if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
       const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY/AZURE_OPENAI_API_KEY) or BURGER_MCP_URL';
@@ -102,11 +98,9 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     }
 
     let model: ChatOpenAI;
-
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
 
     if (openAiApiKey) {
-      context.log(`Using Standard OpenAI (or compatible) via API Key with model: ${modelName}`);
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
@@ -114,7 +108,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
-      context.log(`Using Azure OpenAI via Managed Identity with model: ${modelName}`);
       model = new ChatOpenAI({
         configuration: {
           baseURL: azureOpenAiEndpoint,
@@ -144,12 +137,12 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       name: 'burger-mcp-client',
       version: '1.0.0',
     });
-    context.log(`Connecting to Burger MCP server at ${burgerMcpUrl}`);
+    context.log(`[chats-post] Connecting to MCP: ${burgerMcpUrl}`);
     const transport = new StreamableHTTPClientTransport(new URL(burgerMcpUrl));
     await client.connect(transport);
 
     const tools = await loadMcpTools('burger', client);
-    context.log(`Loaded ${tools.length} tools from Burger MCP server`);
+    context.log(`[chats-post] Loaded ${tools.length} tools`);
 
     const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
 
@@ -167,7 +160,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
 
     const question = messages[messages.length - 1]!.content;
     const previousMessages = await chatHistory.getMessages();
-    context.log(`History length: ${previousMessages.length} messages`);
 
     const responseStream = agent.streamEvents(
       {
@@ -180,14 +172,18 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     );
 
     const generateSessionTitle = async () => {
-      const { title } = await chatHistory.getContext();
-      if (!title) {
-        const response = await model.invoke([
-          ['system', titleSystemPrompt],
-          ['human', question],
-        ]);
-        context.log(`Generated title: ${response.text}`);
-        chatHistory.setContext({ title: response.text });
+      try {
+          const { title } = await chatHistory.getContext();
+          if (!title) {
+            const response = await model.invoke([
+              ['system', titleSystemPrompt],
+              ['human', question],
+            ]);
+            context.log(`Generated title: ${response.text}`);
+            chatHistory.setContext({ title: response.text });
+          }
+      } catch (e) {
+          context.warn('Failed to generate session title', e);
       }
     };
 

@@ -5,37 +5,39 @@ import { AzureCosmsosDBNoSQLChatMessageHistory } from '@langchain/azure-cosmosdb
 import { getCredentials, getInternalUserId } from '../auth.js';
 
 async function getChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-  context.log('Processing GET /chats request');
-  const azureCosmosDbEndpoint = process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT;
-  const { sessionId } = request.params;
+  context.log(`[chats-get] Processing request. URL: ${request.url}`);
   
-  const userId = await getInternalUserId(request);
-  context.log(`Resolved User ID: ${userId}`);
+  // Log all query parameters for debugging
+  const queryParams = Object.fromEntries(request.query.entries());
+  context.log(`[chats-get] Query Params: ${JSON.stringify(queryParams)}`);
 
+  const userId = await getInternalUserId(request);
+  
   if (!userId) {
-    context.warn('User ID missing in request');
+    context.error('[chats-get] Failed to resolve userId from request.');
     return {
       status: 400,
       jsonBody: {
-        error: 'Invalid or missing userId in the request. Please ensure you are logged in or provide userId in query.',
+        error: 'Invalid or missing userId. Please ensure you are logged in or provide userId in query.',
+        debug: { queryParams }
       },
     };
   }
 
+  context.log(`[chats-get] Resolved userId: ${userId}`);
+  
+  const azureCosmosDbEndpoint = process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT;
+  const { sessionId } = request.params;
+
   try {
     if (!azureCosmosDbEndpoint) {
-      // Fallback to memory (mock) if no DB
       if (process.env.NODE_ENV !== 'production') {
+          context.warn('[chats-get] No Cosmos DB endpoint, returning mock empty list (dev mode)');
           return { jsonBody: [] };
       }
       const errorMessage = 'Missing required environment variable: AZURE_COSMOSDB_NOSQL_ENDPOINT';
       context.error(errorMessage);
-      return {
-        status: 500,
-        jsonBody: {
-          error: errorMessage,
-        },
-      };
+      return { status: 500, jsonBody: { error: errorMessage } };
     }
 
     const credentials = getCredentials();
@@ -48,6 +50,7 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
     });
 
     if (sessionId) {
+      context.log(`[chats-get] Fetching messages for session: ${sessionId}`);
       const messages = await chatHistory.getMessages();
       const chatMessages = messages.map((message) => ({
         role: message.getType() === 'human' ? 'user' : 'assistant',
@@ -56,6 +59,7 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
       return { jsonBody: chatMessages };
     }
 
+    context.log(`[chats-get] Fetching all sessions for user: ${userId}`);
     try {
         const sessions = await chatHistory.getAllSessions();
         const chatSessions = sessions.map((session) => ({
@@ -65,19 +69,20 @@ async function getChats(request: HttpRequest, context: InvocationContext): Promi
         return { jsonBody: chatSessions };
     } catch (dbError: any) {
         if (dbError.code === 404) {
-            return { jsonBody: [] }; // No history container yet
+            context.log('[chats-get] History container not found, returning empty list.');
+            return { jsonBody: [] }; 
         }
         throw dbError;
     }
 
   } catch (_error: unknown) {
     const error = _error as Error;
-    context.error(`Error when processing chats-get request: ${error.message}`);
-
+    context.error(`[chats-get] Error processing request: ${error.message}`);
     return {
-      status: 500, // Changed from 404 to 500 for generic errors, specific 404s handled above
+      status: 500,
       jsonBody: {
         error: 'Failed to retrieve chat history',
+        details: error.message
       },
     };
   }

@@ -10,7 +10,6 @@ import logoutSvg from '../../assets/icons/logout.svg?raw';
 import microsoftSvg from '../../assets/providers/microsoft.svg?raw';
 import githubSvg from '../../assets/providers/github.svg?raw';
 
-// Standard Azure SWA routes
 const loginRoute = '/.auth/login';
 const logoutRoute = '/.auth/logout';
 
@@ -244,7 +243,7 @@ export class AuthComponent extends LitElement {
       align-items: center;
       font-size: 0.9rem;
       font-weight: 600;
-      color: var(--azc-text-color-nav);
+      color: #212121; /* Forced Black */
     }
     .login-icon {
       width: 24px;
@@ -260,8 +259,9 @@ export class AuthComponent extends LitElement {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        color: #000; /* Ensure visible */
     }
-    /* Make logout button visible with dark grey color */
+    /* High Contrast Logout Button */
     .logout {
       background: rgba(0,0,0,0.05);
       border: 1px solid transparent;
@@ -277,8 +277,8 @@ export class AuthComponent extends LitElement {
       height: 36px;
     }
     .logout:hover {
-      background: rgba(255, 87, 34, 0.1);
-      color: var(--azc-primary);
+      background: #FF5722;
+      color: #fff;
     }
     .logout svg {
       fill: currentColor;
