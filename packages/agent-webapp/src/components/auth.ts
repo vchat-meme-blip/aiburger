@@ -90,7 +90,7 @@ export class AuthComponent extends LitElement {
   protected renderLogin = () =>
     this.loaded
       ? this.userDetails
-        ? html`<slot></slot>`
+        ? nothing // Do not render empty slot, simply hide to prevent layout blocking
         : this.renderLandingPage()
       : html`<div class="loading-screen"><div class="spinner"></div></div>`;
 
@@ -212,9 +212,14 @@ export class AuthComponent extends LitElement {
 
   static override styles = css`
     :host {
-      /* Changed to contents so children participate in body grid */
+      /* Critical fix: use contents so it doesn't block the grid layout of the body */
       display: contents;
       --azc-text-color-nav: #212121;
+    }
+    
+    /* Hide host completely when authenticated in login mode to prevent overlay issues */
+    :host(.authenticated[type="login"]) {
+        display: none;
     }
 
     /* Loading State */
@@ -224,6 +229,11 @@ export class AuthComponent extends LitElement {
       align-items: center;
       height: 100vh;
       width: 100vw;
+      position: fixed;
+      top: 0;
+      left: 0;
+      background: white;
+      z-index: 9999;
     }
     .spinner {
       width: 40px;

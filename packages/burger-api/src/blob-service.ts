@@ -93,17 +93,11 @@ export class BlobService {
     }
 
     try {
-      // Path to the images directory relative to CWD (usually project root or dist)
-      // In dev: packages/burger-api
-      // In prod: wwwroot
-      let imagesDirectory = path.join(process.cwd(), 'data', 'images');
+      let imagesDirectory = await this.findDataDirectory();
       
-      // Try to find the data directory
-      try {
-          await fs.access(imagesDirectory);
-      } catch {
-          // Fallback for when running in dist or different context
-          imagesDirectory = path.join(__dirname, '../../../data/images'); 
+      if (!imagesDirectory) {
+          console.warn('Could not find data/images directory. Skipping upload.');
+          return;
       }
 
       // Get all jpg files in the directory
@@ -115,7 +109,7 @@ export class BlobService {
       // Upload all images in parallel
       const { containerClient } = this;
       const uploadPromises = imageFiles.map(async (imageFile) => {
-        const filePath = path.join(imagesDirectory, imageFile);
+        const filePath = path.join(imagesDirectory!, imageFile);
         const fileContent = await fs.readFile(filePath);
 
         const blockBlobClient = containerClient.getBlockBlobClient(imageFile);
@@ -204,6 +198,23 @@ export class BlobService {
       return false;
     }
   }
+  
+  private async findDataDirectory(): Promise<string | undefined> {
+      // Try multiple locations to be robust against deployment structure
+      const candidates = [
+          path.join(process.cwd(), 'data', 'images'),
+          path.join(process.cwd(), '../burger-data/data/images'),
+          path.join(__dirname, '../../../data/images'), // dist structure
+          path.join(__dirname, '../../../../burger-data/data/images'), // monorepo local
+      ];
+      
+      for (const dir of candidates) {
+          if (await this.pathExists(dir)) {
+              return dir;
+          }
+      }
+      return undefined;
+  }
 
   /**
    * Get a file from the local filesystem
@@ -212,23 +223,23 @@ export class BlobService {
    */
   private async getLocalFile(fileName: string): Promise<Buffer | undefined> {
     try {
-      // Look in likely locations
-      const potentialPaths = [
-          path.join(process.cwd(), 'data', 'images', fileName),
-          path.join(process.cwd(), '../burger-data/data/images', fileName),
-          path.join(__dirname, '../../../data/images', fileName)
-      ];
-
-      for (const filePath of potentialPaths) {
-          if (await this.pathExists(filePath)) {
-               const fileContent = await fs.readFile(filePath);
-               console.log(`Loaded local file: ${fileName} from ${filePath}`);
-               return fileContent;
-          }
+      const imagesDir = await this.findDataDirectory();
+      if (!imagesDir) {
+          console.warn(`Could not locate local images directory for ${fileName}`);
+          return undefined;
+      }
+      
+      const filePath = path.join(imagesDir, fileName);
+      
+      // Check if file exists
+      if (!(await this.pathExists(filePath))) {
+        console.warn(`Local file '${fileName}' not found at path: ${filePath}`);
+        return undefined;
       }
 
-      console.warn(`Local file '${fileName}' not found in any searched path.`);
-      return undefined;
+      // Read file
+      const fileContent = await fs.readFile(filePath);
+      return fileContent;
     } catch (error) {
       console.error(`Error reading local file '${fileName}':`, error);
       return undefined;

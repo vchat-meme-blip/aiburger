@@ -38,8 +38,7 @@ body {
 
 /* 
    CSS Grid layout for the body.
-   Because azc-auth is now 'display: contents', its children (azc-sidebar and main) 
-   will fall directly into these grid tracks.
+   azc-auth uses display: contents, so azc-sidebar and main become direct children of body grid.
 */
 body {
   display: grid;
@@ -57,6 +56,7 @@ body {
 /* Sidebar Area */
 azc-sidebar {
     grid-column: 1;
+    grid-row: 1;
     height: 100vh;
     z-index: 100;
 }
@@ -64,11 +64,13 @@ azc-sidebar {
 /* Main Content Area */
 main {
   grid-column: 2;
+  grid-row: 1;
   position: relative;
   height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .view-container {
@@ -78,6 +80,7 @@ main {
     display: flex;
     flex-direction: column;
     height: 100%;
+    width: 100%;
 }
 
 /* View Transition Logic */

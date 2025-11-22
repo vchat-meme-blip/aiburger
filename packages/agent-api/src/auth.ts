@@ -33,42 +33,40 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 }
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
-  // Debug: Log all potential sources of ID
+  // 1. Priority: Explicit Query Param (Used by Client)
+  // We prioritize this because once the user is logged in, the client grabs the ID and sends it explicitly.
+  // This avoids issues where SWA headers might be missing in certain proxy configurations.
   const queryId = request.query.get('userId');
-  const bodyId = body?.context?.userId;
-  const authUserId = getAuthenticationUserId(request);
-  
-  console.log(`[Auth] Resolution - Headers: ${!!authUserId}, Query: ${queryId}, Body: ${bodyId}`);
-
-  // 1. Priority: Query Parameter (Fix for 400 errors when client has state)
   if (queryId) {
-      console.log(`[Auth] Using query parameter userId: ${queryId}`);
       return queryId;
   }
 
-  // 2. Priority: Body Parameter
+  // 2. Priority: Body Context (Used in Chat POST)
+  const bodyId = body?.context?.userId;
   if (bodyId) {
-      console.log(`[Auth] Using body context userId: ${bodyId}`);
       return bodyId;
   }
 
-  // 3. Fallback: SWA Auth Header (Initial login state)
+  // 3. Fallback: SWA Auth Header (Initial Login / Discovery)
+  const authUserId = getAuthenticationUserId(request);
   if (authUserId) {
+    // IMPORTANT: The ID must be hashed to match how it's stored in the DB/Frontend
     const id = createHash('sha256').update(authUserId).digest('hex').slice(0, 32);
+    
+    // Verify existence (lazy creation handled by /me-get)
     try {
         const db = await UserDbService.getInstance();
         const user = await db.getUserById(id);
         if (user) {
             return user.id;
         }
-        // If user doesn't exist in DB yet, return the hash
+        // If not found in DB yet, return the hash so downstream can try to use it or fail gracefully
         return id;
     } catch (e) {
-        console.warn(`[Auth] DB lookup failed for ${id}, continuing with hashed ID.`, e);
+        console.warn(`[Auth] DB lookup failed for ${id}, using hash directly.`, e);
         return id;
     }
   }
 
-  console.warn('[Auth] No userId found in request.');
   return undefined;
 }
