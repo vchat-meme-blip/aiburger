@@ -4,12 +4,31 @@ import { HistoryComponent } from '../components/history.js';
 import { burgerApiBaseUrl } from './orders.service.js';
 
 // Chat and History components are defined in index.html
-// with their respective ids so we can access them here
 declare global {
   interface Window {
     chatHistory: HistoryComponent;
     chat: ChatComponent;
   }
+}
+
+// State for View Switching
+type ViewName = 'chat' | 'schedules' | 'promos' | 'wallet';
+let activeView: ViewName = 'chat';
+
+export function setActiveView(view: ViewName) {
+    activeView = view;
+    // Dispatch event for UI updates
+    window.dispatchEvent(new CustomEvent('azc-view-change', { detail: { view } }));
+    
+    // Handle DOM visibility
+    document.querySelectorAll('.view-section').forEach(el => {
+        el.classList.remove('active');
+    });
+    document.getElementById(`view-${view}`)?.classList.add('active');
+}
+
+export function getActiveView() {
+    return activeView;
 }
 
 let userIdPromise: Promise<string | undefined> | undefined;
@@ -28,21 +47,31 @@ export async function initUserSession() {
   try {
     const userId = await getUserId();
     if (!userId) {
-      throw new Error('User not authenticated');
+      // If on login page, this is expected
+      return;
     }
 
-    // Set up user ID for chat history and chat components
-    window.chatHistory.userId = userId;
-    (window.chatHistory as unknown as HTMLElement).addEventListener('loadSession', (event) => {
-      const { id, messages } = (event as CustomEvent).detail;
-      window.chat.sessionId = id;
-      window.chat.messages = messages;
-    });
+    // Set up user ID for components if they exist
+    if(window.chatHistory) {
+        window.chatHistory.userId = userId;
+        (window.chatHistory as unknown as HTMLElement).addEventListener('loadSession', (event) => {
+          const { id, messages } = (event as CustomEvent).detail;
+          if(window.chat) {
+              window.chat.sessionId = id;
+              window.chat.messages = messages;
+              // If loading a chat, switch to chat view
+              setActiveView('chat');
+          }
+        });
+    }
 
-    window.chat.userId = userId;
-    (window.chat as unknown as HTMLElement).addEventListener('messagesUpdated', () => {
-      window.chatHistory.refresh();
-    });
+    if(window.chat) {
+        window.chat.userId = userId;
+        (window.chat as unknown as HTMLElement).addEventListener('messagesUpdated', () => {
+          if(window.chatHistory) window.chatHistory.refresh();
+        });
+    }
+    
   } catch (error) {
     console.log('Error initializing user session:', error);
   }
