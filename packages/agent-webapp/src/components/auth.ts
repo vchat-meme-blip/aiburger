@@ -212,9 +212,8 @@ export class AuthComponent extends LitElement {
 
   static override styles = css`
     :host {
-      display: block;
-      width: 100%;
-      height: 100%;
+      /* Changed to contents so children participate in body grid */
+      display: contents;
       --azc-text-color-nav: #212121;
     }
 
@@ -223,8 +222,8 @@ export class AuthComponent extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100%;
-      width: 100%;
+      height: 100vh;
+      width: 100vw;
     }
     .spinner {
       width: 40px;
@@ -288,8 +287,8 @@ export class AuthComponent extends LitElement {
 
     /* --- Landing Page Styles --- */
     .landing-page {
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       overflow-y: auto;
       background-color: var(--azc-bg);
       color: var(--azc-text-color);
@@ -298,6 +297,10 @@ export class AuthComponent extends LitElement {
       display: flex;
       flex-direction: column;
       align-items: center;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 9999;
     }
 
     /* Hero */

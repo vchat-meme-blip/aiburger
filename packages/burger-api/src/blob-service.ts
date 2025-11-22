@@ -1,8 +1,10 @@
+
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import { DefaultAzureCredential } from '@azure/identity';
+import process from 'node:process';
 
 export class BlobService {
   private static instance: BlobService;
@@ -52,6 +54,8 @@ export class BlobService {
       await this.ensureImagesUploaded();
     } catch (error) {
       console.error('Failed to initialize Azure Blob Storage:', error);
+      // Fallback to local
+      this.useLocalFallback = true;
     }
   }
 
@@ -89,8 +93,18 @@ export class BlobService {
     }
 
     try {
-      // Path to the images directory
-      const imagesDirectory = path.join(process.cwd(), 'data', 'images');
+      // Path to the images directory relative to CWD (usually project root or dist)
+      // In dev: packages/burger-api
+      // In prod: wwwroot
+      let imagesDirectory = path.join(process.cwd(), 'data', 'images');
+      
+      // Try to find the data directory
+      try {
+          await fs.access(imagesDirectory);
+      } catch {
+          // Fallback for when running in dist or different context
+          imagesDirectory = path.join(__dirname, '../../../data/images'); 
+      }
 
       // Get all jpg files in the directory
       const allFiles = await fs.readdir(imagesDirectory);
@@ -136,8 +150,8 @@ export class BlobService {
 
     // Use Azure Blob Storage when available
     if (!this.isInitialized || !this.containerClient) {
-      console.warn('Blob Service not initialized');
-      return undefined;
+      console.warn('Blob Service not initialized, trying local fallback');
+      return this.getLocalFile(blobName);
     }
 
     try {
@@ -146,8 +160,8 @@ export class BlobService {
       // Check if blob exists
       const exists = await blobClient.exists();
       if (!exists) {
-        console.warn(`Blob '${blobName}' does not exist.`);
-        return undefined;
+        console.warn(`Blob '${blobName}' does not exist in cloud, checking local.`);
+        return this.getLocalFile(blobName);
       }
 
       const downloadResponse = await blobClient.download();
@@ -198,18 +212,23 @@ export class BlobService {
    */
   private async getLocalFile(fileName: string): Promise<Buffer | undefined> {
     try {
-      const filePath = path.join(process.cwd(), 'data', 'images', fileName);
+      // Look in likely locations
+      const potentialPaths = [
+          path.join(process.cwd(), 'data', 'images', fileName),
+          path.join(process.cwd(), '../burger-data/data/images', fileName),
+          path.join(__dirname, '../../../data/images', fileName)
+      ];
 
-      // Check if file exists
-      if (!(await this.pathExists(filePath))) {
-        console.warn(`Local file '${fileName}' not found at path: ${filePath}`);
-        return undefined;
+      for (const filePath of potentialPaths) {
+          if (await this.pathExists(filePath)) {
+               const fileContent = await fs.readFile(filePath);
+               console.log(`Loaded local file: ${fileName} from ${filePath}`);
+               return fileContent;
+          }
       }
 
-      // Read file
-      const fileContent = await fs.readFile(filePath);
-      console.log(`Loaded local file: ${fileName}`);
-      return fileContent;
+      console.warn(`Local file '${fileName}' not found in any searched path.`);
+      return undefined;
     } catch (error) {
       console.error(`Error reading local file '${fileName}':`, error);
       return undefined;

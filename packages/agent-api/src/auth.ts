@@ -40,7 +40,19 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
   
   console.log(`[Auth] Resolution - Headers: ${!!authUserId}, Query: ${queryId}, Body: ${bodyId}`);
 
-  // 1. Preference: SWA Auth Header
+  // 1. Priority: Query Parameter (Fix for 400 errors when client has state)
+  if (queryId) {
+      console.log(`[Auth] Using query parameter userId: ${queryId}`);
+      return queryId;
+  }
+
+  // 2. Priority: Body Parameter
+  if (bodyId) {
+      console.log(`[Auth] Using body context userId: ${bodyId}`);
+      return bodyId;
+  }
+
+  // 3. Fallback: SWA Auth Header (Initial login state)
   if (authUserId) {
     const id = createHash('sha256').update(authUserId).digest('hex').slice(0, 32);
     try {
@@ -49,25 +61,12 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
         if (user) {
             return user.id;
         }
-        // If user doesn't exist in DB yet (me-get not called), still return the hash
-        // so the agent can work with it.
+        // If user doesn't exist in DB yet, return the hash
         return id;
     } catch (e) {
         console.warn(`[Auth] DB lookup failed for ${id}, continuing with hashed ID.`, e);
         return id;
     }
-  }
-
-  // 2. Fallback: Query Parameter (High Priority for Dev/Hybrid)
-  if (queryId) {
-      console.log(`[Auth] Using query parameter userId: ${queryId}`);
-      return queryId;
-  }
-
-  // 3. Fallback: Body Parameter
-  if (bodyId) {
-      console.log(`[Auth] Using body context userId: ${bodyId}`);
-      return bodyId;
   }
 
   console.warn('[Auth] No userId found in request.');
