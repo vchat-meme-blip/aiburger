@@ -9,7 +9,7 @@ export class PromosComponent extends LitElement {
   @state() promos: any[] = [];
   @state() loading = false;
 
-  async connectedCallback() {
+  override async connectedCallback() {
       super.connectedCallback();
       this.loadPromos();
   }
@@ -33,7 +33,7 @@ export class PromosComponent extends LitElement {
       }
   }
 
-  render() {
+  override render() {
     return html`
       <div class="view-header">
         <h1>Deal Hunter</h1>
@@ -82,7 +82,7 @@ export class PromosComponent extends LitElement {
       }, 100);
   }
 
-  static styles = css`
+  static override styles = css`
     :host { display: block; width: 100%; height: 100%; }
     
     .view-header { padding: 2rem; max-width: 1200px; margin: 0 auto; }

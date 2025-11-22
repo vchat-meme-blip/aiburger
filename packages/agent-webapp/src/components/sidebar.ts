@@ -19,7 +19,7 @@ export class SidebarComponent extends LitElement {
   @state() userInitials = '';
   @state() userPhoto = '';
 
-  async connectedCallback() {
+  override async connectedCallback() {
       super.connectedCallback();
       window.addEventListener('azc-view-change', (e: any) => {
           this.activeTab = e.detail.view;
@@ -45,7 +45,7 @@ export class SidebarComponent extends LitElement {
       if(auth) auth.onLogoutClicked();
   }
 
-  render() {
+  override render() {
     return html`
       <div class="brand">
         <img src="/favicon.png" alt="Chicha" />
@@ -77,7 +77,7 @@ export class SidebarComponent extends LitElement {
     `;
   }
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: flex;
       flex-direction: column;

@@ -6,7 +6,7 @@ import clockSvg from '../../assets/icons/clock.svg?raw';
 
 @customElement('azc-schedules')
 export class SchedulesComponent extends LitElement {
-  render() {
+  override render() {
     return html`
       <div class="view-header">
         <h1>Scheduled Orders</h1>
@@ -23,7 +23,7 @@ export class SchedulesComponent extends LitElement {
     `;
   }
 
-  static styles = css`
+  static override styles = css`
     :host {
       display: block;
       width: 100%;

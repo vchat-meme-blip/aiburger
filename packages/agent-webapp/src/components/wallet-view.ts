@@ -8,7 +8,7 @@ export class WalletViewComponent extends LitElement {
   @state() balance = { balance: 0, cryptoBalance: 0 };
   @state() loading = false;
 
-  async connectedCallback() {
+  override async connectedCallback() {
       super.connectedCallback();
       this.loadWallet();
   }
@@ -31,7 +31,7 @@ export class WalletViewComponent extends LitElement {
       }
   }
 
-  render() {
+  override render() {
     return html`
       <div class="view-header">
         <h1>Universal Wallet</h1>
@@ -113,7 +113,7 @@ export class WalletViewComponent extends LitElement {
     `;
   }
 
-  static styles = css`
+  static override styles = css`
     :host { display: block; width: 100%; height: 100%; }
     .view-header { padding: 2rem; max-width: 800px; margin: 0 auto; }
     h1 { font-family: 'Sofia Sans Condensed', sans-serif; font-size: 2.5rem; margin: 0; color: #212121; text-transform: uppercase; }
