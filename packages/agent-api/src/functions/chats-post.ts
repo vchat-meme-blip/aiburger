@@ -47,21 +47,19 @@ const titleSystemPrompt = `Create a short, punchy title for this chat session (m
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('[chats-post] Processing POST request');
+  
+  // Config Diagnosis Logging
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
+  const azureModelName = process.env.AZURE_OPENAI_MODEL;
+  
+  context.log(`[Config] AZURE_OPENAI_API_ENDPOINT: ${azureOpenAiEndpoint ? 'Set' : 'Missing'}`);
+  context.log(`[Config] OPENAI_API_KEY: ${openAiApiKey ? 'Set' : 'Missing'}`);
+  context.log(`[Config] Model: ${azureModelName}`);
   
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
-
-  // Log Azure OpenAI configuration on startup (safe logging)
-  if (!openAiApiKey) {
-      context.log(`[chats-post] Using Managed Identity for Azure OpenAI.`);
-      context.log(`[chats-post] Endpoint: ${azureOpenAiEndpoint}`);
-      context.log(`[chats-post] Model Deployment: ${process.env.AZURE_OPENAI_MODEL}`);
-  } else {
-      context.log(`[chats-post] Using API Key for OpenAI.`);
-  }
 
   try {
     const requestBody = (await request.json()) as AIChatCompletionRequest;
@@ -107,9 +105,11 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     }
 
     let model: ChatOpenAI;
+    // Prefer explicit model name, fallback to gpt-4o-mini
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
 
     if (openAiApiKey) {
+      context.log('[chats-post] Using Standard OpenAI client');
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
@@ -117,6 +117,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
+      context.log('[chats-post] Using Azure OpenAI with Managed Identity');
       model = new ChatOpenAI({
         configuration: {
           baseURL: azureOpenAiEndpoint,

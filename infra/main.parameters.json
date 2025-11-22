@@ -27,7 +27,13 @@
       "value": "${AZURE_OPENAI_CHAT_MODEL_CAPACITY=10}"
     },
     "enableAIFoundry": {
-      "value": "${AZURE_AI_FOUNDRY_ENABLED=false}"
+      "value": "${AZURE_AI_FOUNDRY_ENABLED=true}"
+    },
+    "azureOpenAiApiEndpoint": {
+      "value": "${AZURE_OPENAI_API_ENDPOINT}"
+    },
+    "azureOpenAiApiKey": {
+      "value": "${AZURE_OPENAI_API_KEY}"
     },
     "isContinuousIntegration": {
       "value": "${CI=false}"

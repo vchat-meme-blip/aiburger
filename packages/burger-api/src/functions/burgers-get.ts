@@ -1,10 +1,15 @@
+
 import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
 import { Burger } from '../burger.js';
 
 function transformBurgerImageUrl(burger: Burger, request: HttpRequest): Burger {
   const url = new URL(request.url);
-  const baseUrl = `${url.protocol}//${url.host}`;
+  
+  // When running in Azure Functions, use x-forwarded-proto to handle SSL termination
+  const protocol = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '');
+  const host = request.headers.get('x-forwarded-host') || url.host;
+  const baseUrl = `${protocol}://${host}`;
 
   return {
     ...burger,

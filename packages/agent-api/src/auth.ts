@@ -34,9 +34,18 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
   // 1. Priority: Explicit Query Param (Used by Client)
-  // We prioritize this because once the user is logged in, the client grabs the ID and sends it explicitly.
-  // This avoids issues where SWA headers might be missing in certain proxy configurations.
-  const queryId = request.query.get('userId');
+  let queryId = request.query.get('userId');
+
+  // Fallback: Manually parse URL if request.query is empty (Edge case in some proxy configs)
+  if (!queryId && request.url.includes('userId=')) {
+      try {
+          const urlObj = new URL(request.url);
+          queryId = urlObj.searchParams.get('userId');
+      } catch (e) {
+          console.warn('[Auth] Failed to manual parse URL for userId', e);
+      }
+  }
+
   if (queryId) {
       return queryId;
   }

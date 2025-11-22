@@ -56,13 +56,6 @@ services:
           run: npm run build
 
 hooks:
-  postprovision:
-    windows:
-      shell: pwsh
-      run: azd env get-values > .env
-    posix:
-      shell: sh
-      run: azd env get-values > .env
   postup:
     windows:
       shell: pwsh

@@ -1,3 +1,4 @@
+
 {
   "name": "burger-api",
   "version": "1.0.0",
@@ -5,7 +6,8 @@
   "private": true,
   "main": "./dist/src/{tracing.js,functions/*.js}",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-data",
+    "copy-data": "node -e \"const fs = require('fs'); const path = require('path'); try { fs.mkdirSync('dist/data', { recursive: true }); fs.cpSync('data', 'dist/data', { recursive: true }); console.log('Data copied successfully.'); } catch (e) { console.error('Error copying data:', e); }\"",
     "watch": "tsc -w",
     "clean": "rimraf dist",
     "prestart": "npm run clean && npm run update:local-settings",

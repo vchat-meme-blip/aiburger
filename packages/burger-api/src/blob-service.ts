@@ -203,17 +203,20 @@ export class BlobService {
       // Robust search for the data/images directory
       // This covers local dev, Azure Functions runtime (wwwroot), and compiled dist paths
       const candidates = [
+          // Local dev
           path.join(process.cwd(), 'data', 'images'),
-          path.join(process.cwd(), '../burger-data/data/images'),
-          path.join(__dirname, '../../../data/images'), 
-          path.join(__dirname, '../../../../burger-data/data/images'),
-          // Azure Functions deployment structure
+          // Azure Functions production (wwwroot root)
+          path.join(process.cwd(), '..', 'data', 'images'),
+          // Azure Functions production (wwwroot/dist)
           path.join(__dirname, '..', '..', 'data', 'images'), 
+          path.join(__dirname, '..', 'data', 'images'),
+          // Standard path in Azure Web App
+          process.env.HOME ? path.join(process.env.HOME, 'site', 'wwwroot', 'dist', 'data', 'images') : '',
           path.join(process.cwd(), 'dist', 'data', 'images')
       ];
       
       for (const dir of candidates) {
-          if (await this.pathExists(dir)) {
+          if (dir && await this.pathExists(dir)) {
               console.log(`[BlobService] Found image directory at: ${dir}`);
               return dir;
           }

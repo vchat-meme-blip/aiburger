@@ -1,3 +1,4 @@
+
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
 import { UberClient, UberSearchResponse } from '../uber-client.js';
@@ -34,6 +35,12 @@ app.http('discovery-search', {
              return { status: 400, jsonBody: { error: 'Search query (q) is required' } };
         }
 
+        // Get Base URL for absolute images
+        const url = new URL(request.url);
+        const protocol = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '');
+        const host = request.headers.get('x-forwarded-host') || url.host;
+        const baseUrl = `${protocol}://${host}`;
+
         const queryTerms = query.toLowerCase().split(' ').filter(t => t.length > 2); // Ignore small words
         const results: any[] = [];
 
@@ -54,7 +61,7 @@ app.http('discovery-search', {
                     name: burger.name,
                     description: burger.description,
                     price: burger.price,
-                    image_url: `api/images/${burger.imageUrl}`, // Relative to our API
+                    image_url: `${baseUrl}/api/images/${burger.imageUrl}`, // Absolute URL
                     score: score + 0.5, // Slight bias for internal items
                     promo: 'Free Fries & Drink Included'
                 });
