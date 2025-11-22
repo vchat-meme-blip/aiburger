@@ -69,6 +69,7 @@ export class HistoryComponent extends LitElement {
   }
 
   async onChatClicked(sessionId: string) {
+    if (!this.userId) return;
     try {
       this.isLoading = true;
       const response = await fetch(`${this.getApiUrl()}/api/chats/${sessionId}/?userId=${this.userId}`);
@@ -93,6 +94,7 @@ export class HistoryComponent extends LitElement {
   }
 
   async onDeleteChatClicked(sessionId: string) {
+    if (!this.userId) return;
     try {
       this.chats = this.chats.filter((chat) => chat.id !== sessionId);
 
@@ -107,7 +109,9 @@ export class HistoryComponent extends LitElement {
   override requestUpdate(name?: string, oldValue?: any) {
     switch (name) {
       case 'userId': {
-        this.refresh();
+        if (this.userId) {
+            this.refresh();
+        }
         break;
       }
 
@@ -141,6 +145,7 @@ export class HistoryComponent extends LitElement {
   }
 
   async refresh() {
+    // Critical Fix: Prevent 400 error by ensuring userId exists before calling API
     if (!this.userId) {
       return;
     }
@@ -151,21 +156,29 @@ export class HistoryComponent extends LitElement {
       const response = await fetch(`${this.getApiUrl()}/api/chats?userId=${this.userId}`);
       
       if (!response.ok) {
+          // If 400, it means userId issue persists, but we handle gracefully
+          if (response.status === 400) {
+              console.warn('Chat history refresh skipped: Invalid User ID');
+              this.isLoading = false;
+              return;
+          }
           throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
       
       const chats = await response.json();
       
       if (!Array.isArray(chats)) {
-          throw new Error('Invalid response format: expected an array of chats');
+          // Handle case where API returns error object instead of array
+          console.warn('Invalid chat history format:', chats);
+          this.chats = [];
+      } else {
+          this.chats = chats;
       }
-      
-      this.chats = chats;
-      this.isLoading = false;
     } catch (error) {
       this.hasError = true;
-      this.isLoading = false;
       console.error('Failed to refresh history:', error);
+    } finally {
+      this.isLoading = false;
     }
   }
 
@@ -443,10 +456,4 @@ export class HistoryComponent extends LitElement {
       }
     }
   `;
-}
-
-declare global {
-  interface HTMLElementTagNameMap {
-    'azc-history': HistoryComponent;
-  }
 }

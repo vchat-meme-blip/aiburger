@@ -200,19 +200,26 @@ export class BlobService {
   }
   
   private async findDataDirectory(): Promise<string | undefined> {
-      // Try multiple locations to be robust against deployment structure
+      // Robust search for the data/images directory
+      // This covers local dev, Azure Functions runtime (wwwroot), and compiled dist paths
       const candidates = [
           path.join(process.cwd(), 'data', 'images'),
           path.join(process.cwd(), '../burger-data/data/images'),
-          path.join(__dirname, '../../../data/images'), // dist structure
-          path.join(__dirname, '../../../../burger-data/data/images'), // monorepo local
+          path.join(__dirname, '../../../data/images'), 
+          path.join(__dirname, '../../../../burger-data/data/images'),
+          // Azure Functions deployment structure
+          path.join(__dirname, '..', '..', 'data', 'images'), 
+          path.join(process.cwd(), 'dist', 'data', 'images')
       ];
       
       for (const dir of candidates) {
           if (await this.pathExists(dir)) {
+              console.log(`[BlobService] Found image directory at: ${dir}`);
               return dir;
           }
       }
+      
+      console.warn('[BlobService] Could not find image directory in any candidate path.');
       return undefined;
   }
 

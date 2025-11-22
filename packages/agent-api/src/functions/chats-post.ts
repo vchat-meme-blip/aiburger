@@ -54,6 +54,15 @@ export async function postChats(request: HttpRequest, context: InvocationContext
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
+  // Log Azure OpenAI configuration on startup (safe logging)
+  if (!openAiApiKey) {
+      context.log(`[chats-post] Using Managed Identity for Azure OpenAI.`);
+      context.log(`[chats-post] Endpoint: ${azureOpenAiEndpoint}`);
+      context.log(`[chats-post] Model Deployment: ${process.env.AZURE_OPENAI_MODEL}`);
+  } else {
+      context.log(`[chats-post] Using API Key for OpenAI.`);
+  }
+
   try {
     const requestBody = (await request.json()) as AIChatCompletionRequest;
     const { messages, context: chatContext } = requestBody;
@@ -112,10 +121,15 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         configuration: {
           baseURL: azureOpenAiEndpoint,
           async fetch(url, init = {}) {
-            const token = await getAzureOpenAiTokenProvider()();
-            const headers = new Headers((init as RequestInit).headers);
-            headers.set('Authorization', `Bearer ${token}`);
-            return fetch(url, { ...init, headers });
+            try {
+                const token = await getAzureOpenAiTokenProvider()();
+                const headers = new Headers((init as RequestInit).headers);
+                headers.set('Authorization', `Bearer ${token}`);
+                return fetch(url, { ...init, headers });
+            } catch (e) {
+                context.error("Failed to acquire Azure OpenAI Token:", e);
+                throw e;
+            }
           },
         },
         modelName: modelName,
