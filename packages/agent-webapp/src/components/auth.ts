@@ -156,6 +156,11 @@ export class AuthComponent extends LitElement {
             </button>`;
           })}
         </div>
+        <div class="legal-footer">
+            <a href="/privacy.html" target="_blank">Privacy Policy</a>
+            &nbsp;•&nbsp;
+            <span>Terms of Service</span>
+        </div>
       </div>
     </div>
   `;
@@ -561,6 +566,22 @@ export class AuthComponent extends LitElement {
       fill: currentColor;
       width: 100%;
       height: 100%;
+    }
+    
+    /* Legal Footer */
+    .legal-footer {
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: var(--azc-text-subtle);
+    }
+    .legal-footer a {
+        color: var(--azc-text-subtle);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+    .legal-footer a:hover {
+        color: var(--azc-primary);
+        text-decoration: underline;
     }
   `;
 }
