@@ -1,4 +1,3 @@
-
 import process from 'node:process';
 import { DbService } from './db-service.js';
 
@@ -11,28 +10,28 @@ export interface UberTokenResponse {
 }
 
 export interface UberStore {
-  id: string;
-  name: string;
-  rating: number;
-  eta: string;
-  delivery_fee: string;
-  image_url: string;
-  url: string;
-  promo?: string;
-  menu?: UberMenuItem[];
+    id: string;
+    name: string;
+    rating: number;
+    eta: string;
+    delivery_fee: string;
+    image_url: string;
+    url: string;
+    promo?: string;
+    menu?: UberMenuItem[];
 }
 
 export interface UberMenuItem {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  image_url?: string;
-  tags: string[];
+    id: string;
+    name: string;
+    description: string;
+    price: number;
+    image_url?: string;
+    tags: string[];
 }
 
 export interface UberSearchResponse {
-  stores?: UberStore[];
+    stores?: UberStore[];
 }
 
 export class UberClient {
@@ -49,42 +48,46 @@ export class UberClient {
     this.clientSecret = process.env.UBER_CLIENT_SECRET || '';
     this.redirectUri = process.env.UBER_REDIRECT_URI || '';
 
-    // --- SANDBOX CONFIGURATION (Strict Mode) ---
-    // Docs: "Testing Applications: https://sandbox-auth.uber.com"
-    // Scopes are automatically granted when using sandbox-auth.
-    
-    // 1. User Login (Browser) -> login.uber.com
+    // --- SANDBOX CONFIGURATION (Hybrid Mode) ---
+    // 1. User Login (Browser) -> Standard Production URL
+    // Reason: 'sandbox-auth.uber.com' often fails DNS resolution for external users.
+    // Using standard login allows the user to sign in.
+    // The Sandbox APP ID will trigger the sandbox behavior after login.
     this.authUrl = 'https://login.uber.com/oauth/v2/authorize';
-    
-    // 2. Token Exchange (Backend) -> sandbox-auth.uber.com (Crucial for Test Apps)
+
+    // 2. Token Exchange (Backend) -> Sandbox
+    // This is where the magic happens: exchanging code for token on this domain
+    // grants the auto-approved scopes.
     this.tokenUrl = 'https://sandbox-auth.uber.com/oauth/v2/token';
-    
-    // 3. API Calls -> test-api.uber.com
+
+    // 3. API Calls -> Sandbox
     this.apiUrl = 'https://test-api.uber.com/v1';
 
-    // Allow override for production via Env Var
+    // Allow override for production via Env Var later
     if (process.env.UBER_ENV === 'production') {
-      this.tokenUrl = 'https://login.uber.com/oauth/v2/token';
-      this.apiUrl = 'https://api.uber.com/v1';
+        this.authUrl = 'https://login.uber.com/oauth/v2/authorize';
+        this.tokenUrl = 'https://login.uber.com/oauth/v2/token';
+        this.apiUrl = 'https://api.uber.com/v1';
     }
 
     this.useMock = !this.clientId || !this.clientSecret;
 
     if (this.useMock) {
-      console.log('⚠️ Uber Credentials missing. Initializing UberClient in SIMULATION MODE.');
+        console.log('⚠️ Uber Credentials missing. Initializing UberClient in SIMULATION MODE.');
     } else {
-      console.log(`[UberClient] Initialized in SANDBOX mode. API: ${this.apiUrl}`);
+        console.log(`[UberClient] Initialized in SANDBOX mode.`);
+        console.log(`- Auth URL: ${this.authUrl}`);
+        console.log(`- Token URL: ${this.tokenUrl}`);
     }
   }
 
   getLoginUrl(state: string): string {
     if (this.useMock) {
-      const appUrl = process.env.AGENT_WEBAPP_URL || 'http://localhost:4280';
-      return `${appUrl}/.auth/login/done?mock=true`;
+        const appUrl = process.env.AGENT_WEBAPP_URL || 'http://localhost:4280';
+        return `${appUrl}/.auth/login/done?mock=true`;
     }
 
-    // In Sandbox, we can request these scopes freely.
-    // They are auto-granted by the backend when using sandbox-auth.
+    // In Sandbox mode, these scopes are auto-granted by the backend exchange.
     const scopes = ['eats.store.search', 'eats.order', 'profile'];
 
     const params = new URLSearchParams({
@@ -99,7 +102,7 @@ export class UberClient {
 
   async exchangeCodeForToken(code: string): Promise<UberTokenResponse> {
     if (this.useMock) {
-      return this.getMockToken();
+        return this.getMockToken();
     }
 
     const params = new URLSearchParams({
@@ -114,21 +117,20 @@ export class UberClient {
   }
 
   async refreshAccessToken(refreshToken: string): Promise<UberTokenResponse> {
-    if (this.useMock) return this.getMockToken();
+      if (this.useMock) return this.getMockToken();
 
-    console.log('[UberClient] Refreshing expired access token...');
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    });
+      console.log('[UberClient] Refreshing expired access token...');
+      const params = new URLSearchParams({
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken
+      });
 
-    return this.fetchToken(params);
+      return this.fetchToken(params);
   }
 
   private async fetchToken(params: URLSearchParams): Promise<UberTokenResponse> {
-    // Hits sandbox-auth.uber.com
     const response = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -149,47 +151,43 @@ export class UberClient {
     const tokenData = await db.getUserToken(userId, 'uber');
 
     if (!tokenData || !tokenData.access_token) {
-      if (this.useMock) return this.getMockRestaurants();
-      throw new Error('User not connected to Uber (No token found)');
+        if (this.useMock) return this.getMockRestaurants();
+        throw new Error('User not connected to Uber (No token found)');
     }
 
     if (this.useMock || tokenData.access_token.startsWith('mock_')) {
-      return this.getMockRestaurants();
+        return this.getMockRestaurants();
     }
 
-    // Hits test-api.uber.com
     const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`;
 
     const callApi = async (token: string) => {
-      return fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
     };
 
     let response = await callApi(tokenData.access_token);
 
-    // Auto-Refresh Logic for 401
     if (response.status === 401 && tokenData.refresh_token) {
-      console.warn('[UberClient] Access token expired. Refreshing...');
-      try {
-        const newTokenData = await this.refreshAccessToken(tokenData.refresh_token);
-        await db.updateUserToken(userId, 'uber', { ...newTokenData, acquired_at: Date.now() });
-        response = await callApi(newTokenData.access_token);
-      } catch (e) {
-        console.error('[UberClient] Refresh failed', e);
-      }
+        console.warn('[UberClient] Access token expired. Refreshing...');
+        try {
+            const newTokenData = await this.refreshAccessToken(tokenData.refresh_token);
+            await db.updateUserToken(userId, 'uber', { ...newTokenData, acquired_at: Date.now() });
+            response = await callApi(newTokenData.access_token);
+        } catch (e) {
+            console.error('[UberClient] Refresh failed', e);
+        }
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
-
-      // Fallback: If Sandbox is empty (common for new test apps), use Mock Data so the Demo works.
-      return this.getMockRestaurants();
+       const errorText = await response.text();
+       console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
+       return this.getMockRestaurants();
     }
 
     return (await response.json()) as UberSearchResponse;
@@ -197,48 +195,40 @@ export class UberClient {
 
   private getMockToken(): UberTokenResponse {
     return {
-      access_token: 'mock_access_token_' + Date.now(),
-      token_type: 'Bearer',
-      expires_in: 3600,
-      refresh_token: 'mock_refresh_token',
-      scope: 'eats.store.search eats.order',
+        access_token: 'mock_access_token_' + Date.now(),
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: 'mock_refresh_token',
+        scope: 'eats.store.search eats.order'
     };
   }
 
   private getMockRestaurants(): UberSearchResponse {
-    return {
-      stores: [
-        {
-          id: 'mock-store-1',
-          name: 'Shake Shack (Sandbox)',
-          rating: 4.8,
-          eta: '15-25',
-          delivery_fee: '$1.99',
-          image_url:
-            'https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?auto=format&fit=crop&w=500&q=60',
-          url: 'https://www.ubereats.com',
-          menu: [
-            {
-              id: 'ss-1',
-              name: 'ShackBurger',
-              description: 'Cheeseburger with lettuce, tomato, ShackSauce.',
-              price: 8.99,
-              tags: ['burger'],
-            },
-          ],
-        },
-        {
-          id: 'mock-store-2',
-          name: 'Five Guys (Sandbox)',
-          rating: 4.6,
-          eta: '20-35',
-          delivery_fee: '$0.49',
-          image_url:
-            'https://images.unsplash.com/photo-1551782450-a2132b4ba21d?auto=format&fit=crop&w=500&q=60',
-          url: 'https://www.ubereats.com',
-          promo: 'BOGO Fries',
-        },
-      ],
-    };
+      return {
+          stores: [
+              {
+                  id: "mock-store-1",
+                  name: "Shake Shack (Sandbox)",
+                  rating: 4.8,
+                  eta: "15-25",
+                  delivery_fee: "$1.99",
+                  image_url: "https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?auto=format&fit=crop&w=500&q=60",
+                  url: "https://www.ubereats.com",
+                  menu: [
+                      { id: "ss-1", name: "ShackBurger", description: "Cheeseburger with lettuce, tomato, ShackSauce.", price: 8.99, tags: ["burger"] }
+                  ]
+              },
+              {
+                  id: "mock-store-2",
+                  name: "Five Guys (Sandbox)",
+                  rating: 4.6,
+                  eta: "20-35",
+                  delivery_fee: "$0.49",
+                  image_url: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?auto=format&fit=crop&w=500&q=60",
+                  url: "https://www.ubereats.com",
+                  promo: "BOGO Fries"
+              }
+          ]
+      };
   }
 }

@@ -8,6 +8,8 @@ import { fetchOrders, type BurgerOrder } from '../services/orders.service.js';
 import copySvg from '../../assets/icons/copy.svg?raw';
 import burgerOutlineSvg from '../../assets/icons/burger-outline.svg?raw';
 
+const burgerApiUrl = import.meta.env.VITE_BURGER_API_URL || 'http://localhost:7071';
+
 @customElement('azc-user-card')
 export class UserCard extends LitElement {
   @state() protected userId = '';
@@ -77,6 +79,13 @@ export class UserCard extends LitElement {
     }
   };
 
+  protected connectUber = () => {
+      if (!this.userId) return;
+      const url = `${burgerApiUrl}/api/uber/login?userId=${this.userId}`;
+      // Open in new window/tab
+      window.open(url, '_blank');
+  };
+
   protected getUserId = async () => {
     this.isLoading = true;
     try {
@@ -142,6 +151,19 @@ export class UserCard extends LitElement {
         </div>
         <div class="warning">Keep this ID private!</div>
       </div>
+    </div>
+
+    <!-- Integration Section -->
+    <div class="integrations">
+        <h3>Integrations</h3>
+        <button class="integration-btn uber" @click=${this.connectUber}>
+            <span class="icon">🚗</span>
+            <span class="text">
+                <strong>Connect Uber Eats</strong>
+                <span class="sub">Link account for delivery</span>
+            </span>
+            <span class="arrow">→</span>
+        </button>
     </div>
   `;
 
@@ -339,6 +361,28 @@ export class UserCard extends LitElement {
     }
     .copy-button:hover { opacity: 1; }
     .copy-icon { width: 20px; height: 20px; display: block; fill: currentColor; }
+
+    /* Integration Buttons */
+    .integrations { margin-top: 2rem; }
+    .integrations h3 { font-size: 1rem; margin-bottom: 1rem; color: #555; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+    .integration-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        background: #000;
+        color: white;
+        border: none;
+        padding: 1rem;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        text-align: left;
+    }
+    .integration-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .integration-btn .icon { font-size: 1.5rem; margin-right: 1rem; }
+    .integration-btn .text { flex: 1; display: flex; flex-direction: column; }
+    .integration-btn .sub { font-size: 0.8rem; opacity: 0.7; font-weight: 400; margin-top: 2px; }
+    .integration-btn .arrow { font-size: 1.2rem; opacity: 0.5; }
 
     /* Orders List */
     .order-list { display: flex; flex-direction: column; gap: 1rem; }
