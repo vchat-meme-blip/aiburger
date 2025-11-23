@@ -48,19 +48,16 @@ export class UberClient {
     this.clientSecret = process.env.UBER_CLIENT_SECRET || '';
     this.redirectUri = process.env.UBER_REDIRECT_URI || '';
 
-    // --- SANDBOX CONFIGURATION (Hybrid Mode) ---
-    // 1. User Login (Browser) -> Standard Production URL
-    // Reason: 'sandbox-auth.uber.com' often fails DNS resolution for external users.
-    // Using standard login allows the user to sign in.
-    // The Sandbox APP ID will trigger the sandbox behavior after login.
-    this.authUrl = 'https://login.uber.com/oauth/v2/authorize';
+    // --- STRICT DASHBOX CONFIGURATION ---
+    // Aligned exactly with the "Integration Steps" from your dashboard.
 
-    // 2. Token Exchange (Backend) -> Sandbox
-    // This is where the magic happens: exchanging code for token on this domain
-    // grants the auto-approved scopes.
-    this.tokenUrl = 'https://sandbox-auth.uber.com/oauth/v2/token';
+    // Step 2 URL:
+    this.authUrl = 'https://sandbox-login.uber.com/oauth/v2/authorize';
 
-    // 3. API Calls -> Sandbox
+    // Step 4 URL:
+    this.tokenUrl = 'https://sandbox-login.uber.com/oauth/v2/token';
+
+    // Step 5 URL (Base):
     this.apiUrl = 'https://test-api.uber.com/v1';
 
     // Allow override for production via Env Var later
@@ -87,7 +84,8 @@ export class UberClient {
         return `${appUrl}/.auth/login/done?mock=true`;
     }
 
-    // In Sandbox mode, these scopes are auto-granted by the backend exchange.
+    // In Sandbox mode, these scopes are auto-granted.
+    // We request them explicitly to match the dashboard flow.
     const scopes = ['eats.store.search', 'eats.order', 'profile'];
 
     const params = new URLSearchParams({
@@ -187,6 +185,8 @@ export class UberClient {
     if (!response.ok) {
        const errorText = await response.text();
        console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
+
+       // Fallback to mock if sandbox is empty or errors
        return this.getMockRestaurants();
     }
 
