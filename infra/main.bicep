@@ -32,31 +32,6 @@ param agentApiServiceName string = 'agent-api'
 param agentWebappName string = 'agent-webapp'
 param blobContainerName string = 'blobs'
 
-@description('Location for the AI Foundry resource group')
-@allowed([
-  // Regions where gpt-5-mini is available,
-  // see https://learn.microsoft.com/azure/ai-foundry/foundry-models/concepts/models-sold-directly-by-azure?pivots=azure-openai&tabs=global-standard-aoai%2Cstandard-chat-completions%2Cglobal-standard#global-standard-model-availability
-  'australiaeast'
-  'eastus'
-  'eastus2'
-  'japaneast'
-  'koreacentral'
-  'sounthindia'
-  'swedencentral'
-  'switzerlandnorth'
-  'uksouth'
-])
-@metadata({
-  azd: {
-    type: 'location'
-  }
-})
-param aiServicesLocation string // Set in main.parameters.json
-param defaultModelName string // Set in main.parameters.json
-param defaultModelVersion string // Set in main.parameters.json
-param defaultModelCapacity int // Set in main.parameters.json
-param enableAIFoundry bool = true // Set in main.parameters.json
-
 // Location is not relevant here as it's only for the built-in api
 // which is not used here. Static Web App is a global service otherwise
 @description('Location for the Static Web App')
@@ -86,7 +61,9 @@ var burgerApiResourceName = '${abbrs.webSitesFunctions}burger-api-${resourceToke
 var burgerMcpResourceName = '${abbrs.webSitesFunctions}burger-mcp-${resourceToken}'
 var agentApiResourceName = '${abbrs.webSitesFunctions}agent-api-${resourceToken}'
 var storageAccountName = '${abbrs.storageStorageAccounts}${resourceToken}'
-var openAiUrl = enableAIFoundry ? 'https://${aiFoundry.outputs.aiServicesName}.openai.azure.com/openai/v1' : ''
+// Using existing Azure OpenAI endpoint
+param defaultModelName string = 'gpt-4o-mini'
+var openAiUrl = 'https://cosychiruka-1347-resource.openai.azure.com/'
 var storageUrl = 'https://${storage.outputs.name}.blob.${environment().suffixes.storage}'
 var burgerApiUrl = 'https://${burgerApiFunction.outputs.defaultHostname}'
 var burgerMcpUrl = 'https://${burgerMcpFunction.outputs.defaultHostname}/mcp'
@@ -441,43 +418,7 @@ module monitoring 'br/public:avm/ptn/azd/monitoring:0.2.1' = {
   }
 }
 
-module aiFoundry 'br/public:avm/ptn/ai-ml/ai-foundry:0.4.0' = if (enableAIFoundry) {
-  name: 'aiFoundry'
-  scope: resourceGroup
-  params: {
-    baseName: substring(resourceToken, 0, 12) // Max 12 chars
-    tags: tags
-    location: aiServicesLocation
-    aiFoundryConfiguration: {
-      roleAssignments: [
-        {
-          principalId: principalId
-          principalType: principalType
-          roleDefinitionIdOrName: 'Cognitive Services OpenAI User'
-        }
-        {
-          principalId: agentApiFunction.outputs.?systemAssignedMIPrincipalId!
-          principalType: 'ServicePrincipal'
-          roleDefinitionIdOrName: 'Cognitive Services OpenAI User'
-       }
-      ]
-    }
-    aiModelDeployments: [
-      {
-        name: defaultModelName
-        model: {
-          format: 'OpenAI'
-          name: defaultModelName
-          version: defaultModelVersion
-        }
-        sku: {
-          capacity: defaultModelCapacity
-          name: 'GlobalStandard'
-        }
-      }
-    ]
-  }
-}
+// AI Foundry module has been removed to use an existing Azure OpenAI endpoint
 
 module cosmosDb 'br/public:avm/res/document-db/database-account:0.16.0' = {
   name: 'cosmosDb'

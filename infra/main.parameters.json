@@ -14,26 +14,8 @@
     "principalId": {
       "value": "${AZURE_PRINCIPAL_ID}"
     },
-    "aiServicesLocation": {
-      "value": "${AZURE_AI_LOCATION=uksouth}"
-    },
     "defaultModelName": {
       "value": "${AZURE_OPENAI_CHAT_MODEL=gpt-4o-mini}"
-    },
-    "defaultModelVersion": {
-      "value": "${AZURE_OPENAI_CHAT_MODEL_VERSION=2024-07-18}"
-    },
-    "defaultModelCapacity": {
-      "value": "${AZURE_OPENAI_CHAT_MODEL_CAPACITY=10}"
-    },
-    "enableAIFoundry": {
-      "value": "${AZURE_AI_FOUNDRY_ENABLED=true}"
-    },
-    "azureOpenAiApiEndpoint": {
-      "value": "${AZURE_OPENAI_API_ENDPOINT}"
-    },
-    "azureOpenAiApiKey": {
-      "value": "${AZURE_OPENAI_API_KEY}"
     },
     "isContinuousIntegration": {
       "value": "${CI=false}"

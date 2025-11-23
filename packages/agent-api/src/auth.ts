@@ -22,9 +22,11 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
   try {
     const header = request.headers.get('x-ms-client-principal');
     if (header) {
-        const token = Buffer.from(header, 'base64').toString('ascii');
+        // Use utf-8 to ensure special characters in names/IDs are parsed correctly
+        const token = Buffer.from(header, 'base64').toString('utf-8');
         const infos = token && JSON.parse(token);
-        return infos?.userId;
+        // Check multiple fields for the ID depending on the provider (AAD, GitHub, Google)
+        return infos?.userId || infos?.sub || infos?.userDetails;
     }
   } catch (error) {
       console.error('Error parsing x-ms-client-principal header:', error);
@@ -36,8 +38,9 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
   // 1. Priority: Explicit Query Param (Used by Client)
   let queryId = request.query.get('userId');
 
-  // Fallback: Manually parse URL if request.query is empty (Edge case in some proxy configs)
-  if (!queryId && request.url.includes('userId=')) {
+  // Fallback: Manually parse URL if request.query is empty or failed
+  // This handles cases where SWA or proxies might mess with the standard query parsing
+  if (!queryId && request.url && request.url.includes('userId=')) {
       try {
           const urlObj = new URL(request.url);
           queryId = urlObj.searchParams.get('userId');
@@ -51,7 +54,8 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
   }
 
   // 2. Priority: Body Context (Used in Chat POST)
-  const bodyId = body?.context?.userId;
+  // Check both nested context and top-level userId
+  const bodyId = body?.context?.userId || body?.userId;
   if (bodyId) {
       return bodyId;
   }

@@ -169,6 +169,12 @@ export async function run() {
       model = new ChatOpenAI({
         configuration: {
           baseURL: azureOpenAiEndpoint,
+          defaultHeaders: {
+            'api-key': process.env.AZURE_OPENAI_API_KEY,
+          },
+          defaultQuery: {
+            'api-version': process.env.AZURE_OPENAI_API_VERSION || '2024-12-01-preview',
+          },
           async fetch(url, init = {}) {
             const token = await getToken();
             const headers = new Headers((init as RequestInit).headers);
@@ -178,8 +184,6 @@ export async function run() {
         },
         modelName: modelName,
         streaming: true,
-        useResponsesApi: true,
-        apiKey: 'not_used',
       });
     }
 

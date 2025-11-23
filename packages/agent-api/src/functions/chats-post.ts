@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import process from 'node:process';
 import { HttpRequest, InvocationContext, HttpResponseInit, app } from '@azure/functions';
 import { createAgent, AIMessage, HumanMessage } from 'langchain';
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatOpenAI, AzureChatOpenAI } from '@langchain/openai';
 import { AzureCosmsosDBNoSQLChatMessageHistory } from '@langchain/azure-cosmosdb';
 import { loadMcpTools } from '@langchain/mcp-adapters';
 import { StreamEvent } from '@langchain/core/dist/tracers/log_stream.js';
@@ -54,10 +54,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
   const azureModelName = process.env.AZURE_OPENAI_MODEL;
   
-  context.log(`[Config] AZURE_OPENAI_API_ENDPOINT: ${azureOpenAiEndpoint ? 'Set' : 'Missing'}`);
-  context.log(`[Config] OPENAI_API_KEY: ${openAiApiKey ? 'Set' : 'Missing'}`);
-  context.log(`[Config] Model: ${azureModelName}`);
-  
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
@@ -67,23 +63,32 @@ export async function postChats(request: HttpRequest, context: InvocationContext
 
     context.log('[chats-post] Resolving user ID...');
     const userId = await getInternalUserId(request, requestBody);
-    context.log(`[chats-post] User resolved: ${userId}`);
     
     if (!userId) {
-      context.warn('[chats-post] Failed to resolve user ID.');
+      // Log headers (safely) to help debug why auth might be failing
+      const headers: Record<string, string> = {};
+      for (const [key, value] of request.headers) {
+          if(key.toLowerCase() !== 'authorization') {
+             headers[key] = value;
+          }
+      }
+      context.warn('[chats-post] Failed to resolve user ID. Headers:', JSON.stringify(headers));
+      
       return {
         status: 400,
         jsonBody: {
-          error: 'Invalid or missing userId in the request. Please ensure you are logged in.',
+          error: 'Invalid or missing userId. Please ensure you are logged in and the client is sending the ID.',
         },
       };
     }
+    context.log(`[chats-post] User resolved: ${userId}`);
 
     if (messages?.length === 0 || !messages[messages.length - 1]?.content) {
+      context.warn('[chats-post] Invalid messages array in request body');
       return {
         status: 400,
         jsonBody: {
-          error: 'Invalid or missing messages in the request body',
+          error: 'Invalid request: "messages" array must not be empty and the last message must have content.',
         },
       };
     }
@@ -104,7 +109,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       };
     }
 
-    let model: ChatOpenAI;
+    let model: ChatOpenAI | AzureChatOpenAI;
     // Prefer explicit model name, fallback to gpt-4o-mini
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
 
@@ -118,25 +123,13 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       });
     } else {
       context.log('[chats-post] Using Azure OpenAI with Managed Identity');
-      model = new ChatOpenAI({
-        configuration: {
-          baseURL: azureOpenAiEndpoint,
-          async fetch(url, init = {}) {
-            try {
-                const token = await getAzureOpenAiTokenProvider()();
-                const headers = new Headers((init as RequestInit).headers);
-                headers.set('Authorization', `Bearer ${token}`);
-                return fetch(url, { ...init, headers });
-            } catch (e) {
-                context.error("Failed to acquire Azure OpenAI Token:", e);
-                throw e;
-            }
-          },
-        },
-        modelName: modelName,
+      // Use AzureChatOpenAI to correctly handle Resource URL + Deployment Name
+      model = new AzureChatOpenAI({
+        azureOpenAIEndpoint: azureOpenAiEndpoint, // This expects the resource URL (e.g., https://my-res.openai.azure.com/)
+        azureOpenAIApiDeploymentName: modelName,     // This is the deployment name
+        azureOpenAIApiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-05-01-preview",
+        azureADTokenProvider: getAzureOpenAiTokenProvider(),
         streaming: true,
-        useResponsesApi: true,
-        apiKey: 'not_used',
       });
     }
 
