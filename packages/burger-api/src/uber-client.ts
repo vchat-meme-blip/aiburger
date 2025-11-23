@@ -46,34 +46,38 @@ export class UberClient {
     this.clientId = process.env.UBER_CLIENT_ID || '';
     this.clientSecret = process.env.UBER_CLIENT_SECRET || '';
     this.redirectUri = process.env.UBER_REDIRECT_URI || '';
-    
-    // Allow overriding URLs for Sandbox/Test environments
+
     this.authUrl = process.env.UBER_AUTH_URL || 'https://login.uber.com/oauth/v2/authorize';
     this.tokenUrl = process.env.UBER_TOKEN_URL || 'https://login.uber.com/oauth/v2/token';
-    this.apiUrl = process.env.UBER_API_URL || 'https://api.uber.com/v1';
-    
-    // If credentials aren't present, default to mock mode for the demo
+
+    // Intelligent Default: If token/auth URL implies sandbox, default API to sandbox
+    const isSandbox = this.authUrl.includes('sandbox') || this.tokenUrl.includes('sandbox');
+    const defaultApi = isSandbox ? 'https://sandbox-api.uber.com/v1' : 'https://api.uber.com/v1';
+
+    this.apiUrl = process.env.UBER_API_URL || defaultApi;
+
+    // If credentials aren't present, default to mock mode
     this.useMock = !this.clientId || !this.clientSecret;
+
     if (this.useMock) {
-        console.log('⚠️ Uber Credentials missing. Initializing UberClient in SIMULATION MODE.');
+        console.log('[UberClient] Credentials missing. Using SIMULATION MODE.');
+    } else {
+        console.log(`[UberClient] Initialized in ${isSandbox ? 'SANDBOX' : 'PRODUCTION'} mode. API: ${this.apiUrl}`);
     }
   }
 
   getLoginUrl(state: string): string {
     if (this.useMock) {
-        // In mock mode, we skip the real auth flow and just return a callback URL
-        // that the frontend can handle or a dummy page.
         const appUrl = process.env.AGENT_WEBAPP_URL || 'http://localhost:4280';
         return `${appUrl}/.auth/login/done?mock=true`;
     }
+
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: 'code',
       redirect_uri: this.redirectUri,
-      // 'eats.store.search' allows finding restaurants
-      // 'delivery' allows placing orders (requires separate approval usually, but good for sandbox)
-      scope: 'eats.store.search', 
-      state: state, 
+      scope: 'eats.store.search',
+      state: state,
     });
     return `${this.authUrl}?${params.toString()}`;
   }
@@ -120,7 +124,7 @@ export class UberClient {
     }
 
     // Uber Eats API endpoint for store search
-    const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`; 
+    const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`;
 
     const response = await fetch(url, {
       method: 'GET',
@@ -131,14 +135,20 @@ export class UberClient {
     });
 
     if (!response.ok) {
-       console.warn('Uber API call failed, returning mock data as fallback. Response:', await response.text());
+       const errorText = await response.text();
+       console.warn('[UberClient] API call failed, returning mock data.', errorText);
+
+       // If it's an auth error, propagate it so the agent knows to ask for re-login
+       if (response.status === 401 || response.status === 403) {
+           throw new Error(`Uber API Unauthorized: ${errorText}`);
+       }
+
        return this.getMockRestaurants();
     }
 
     return (await response.json()) as UberSearchResponse;
   }
 
-  // Enhanced mock data with menus for "Discovery Phase"
   private getMockRestaurants(): UberSearchResponse {
       return {
           stores: [
