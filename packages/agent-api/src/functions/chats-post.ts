@@ -1,4 +1,3 @@
-
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
@@ -26,12 +25,12 @@ You are **Chicha**, an intelligent and sassy burger ordering assistant. You don'
 
 ## Capabilities & Rules
 1.  **Location First**: If the user asks for "nearby" or "delivery", ALWAYS check if you have their location context. If not, ask them to click the location pin button.
-2.  **Real-World Discovery**: Use \`search_nearby_restaurants\` to find real places. 
+2.  **Real-World Discovery**: Use \`search_nearby_restaurants\` to find real places.
     - If the tool fails with an auth error (or says "User not connected"), tell the user: "I need to connect to your Uber account to see what's good around here." and **provide this exact login link**: [Connect Uber Account](<LOGIN_URL>).
     - Format restaurant results beautifully with Markdown (bold names, star ratings, images).
-3.  **Internal Orders**: Use \`get_burgers\` and \`place_order\` for Contoso Burgers. 
+3.  **Internal Orders**: Use \`get_burgers\` and \`place_order\` for Contoso Burgers.
     - *Note*: Placing orders requires a \`userId\`.
-4.  **Proactivity**: 
+4.  **Proactivity**:
     - If a user selects a burger, suggest a matching topping or ask about allergies.
     - If looking at external restaurants, mention delivery times.
 5.  **Follow-up**: ALWAYS generate 3 quick follow-up questions for the user to keep the flow moving.
@@ -47,11 +46,11 @@ const titleSystemPrompt = `Create a short, punchy title for this chat session (m
 
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('[chats-post] Processing POST request');
-  
+
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
-  
+
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
@@ -60,7 +59,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const { messages, context: chatContext } = requestBody;
 
     const userId = await getInternalUserId(request, requestBody);
-    
+
     if (!userId) {
       const hasAuthHeader = request.headers.has('x-ms-client-principal');
       if (!hasAuthHeader) {
@@ -112,14 +111,27 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
-      context.log(`[chats-post] Using Azure OpenAI (Managed Identity). Endpoint: ${azureOpenAiEndpoint}`);
+      context.log(`[chats-post] Using Azure OpenAI. Endpoint: ${azureOpenAiEndpoint}`);
+
+      // Determine auth strategy: API Key (if present) vs Managed Identity (default)
+      // IMPORTANT: We must explicitly only pass one.
+      const authConfig = openAiApiKey
+        ? { azureOpenAIApiKey: openAiApiKey }
+        : { azureADTokenProvider: getAzureOpenAiTokenProvider() };
+
+      if (openAiApiKey) {
+          context.log('[chats-post] Auth: Using API Key');
+      } else {
+          context.log('[chats-post] Auth: Using Managed Identity');
+      }
+
       context.log(`[chats-post] Configuration - Deployment: ${modelName}, API Version: ${apiVersion}`);
-      
+
       model = new AzureChatOpenAI({
         azureOpenAIEndpoint: azureOpenAiEndpoint,
         azureOpenAIApiDeploymentName: modelName,
         azureOpenAIApiVersion: apiVersion,
-        azureADTokenProvider: getAzureOpenAiTokenProvider(),
+        ...authConfig,
         streaming: true,
       });
     }
@@ -141,10 +153,10 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     await client.connect(transport);
 
     const tools = await loadMcpTools('burger', client);
-    
+
     const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
     let currentSystemPrompt = agentSystemPrompt.replace('<LOGIN_URL>', loginUrl);
-    
+
     if (userLocation) {
         currentSystemPrompt += `\n\n[SYSTEM NOTE]: User is currently located at Latitude: ${userLocation.lat}, Longitude: ${userLocation.long}. Use these coordinates.`;
     }
@@ -312,7 +324,6 @@ async function* createJsonStream(
     }
   } catch (e: any) {
       context.error('Error during stream generation:', e);
-      // Send an error chunk to the client so it knows to stop spinning
       const errorChunk = {
           delta: {
               content: `\n\n**Error:** ${e.message || 'An error occurred while communicating with the AI service.'}\n\n*Admin Note: Check if the Azure OpenAI Deployment Name matches the configuration.*`,

@@ -1,4 +1,3 @@
-
 import { WebPubSubClient } from '@azure/web-pubsub-client';
 
 export class RealtimeService {
@@ -21,16 +20,25 @@ export class RealtimeService {
 
     try {
       const burgerApiUrl = import.meta.env.VITE_BURGER_API_URL || 'http://localhost:7071';
-      
+
+      // 1. Pre-flight check: Validate negotiation endpoint manually
+      // This catches 503s before the SDK throws a "URL invalid" error
+      try {
+          const checkRes = await fetch(`${burgerApiUrl}/api/realtime/negotiate?userId=${userId}`);
+          if (checkRes.status === 503 || !checkRes.ok) {
+               console.warn('Real-time service unavailable (Web PubSub not configured). Skipping connection.');
+               return;
+          }
+      } catch (e) {
+          console.warn('Failed to reach Real-time service. Skipping.', e);
+          return;
+      }
+
       this.client = new WebPubSubClient({
         getClientAccessUrl: async () => {
           const res = await fetch(`${burgerApiUrl}/api/realtime/negotiate?userId=${userId}`);
+          // The pre-flight check handles the 503, but we keep this for robustness
           if (!res.ok) {
-             // Gracefully fail if service is unavailable (503) or error (500)
-             if (res.status === 503) {
-                 console.warn('Real-time features disabled (Server returned 503)');
-                 return ''; // Abort connection attempt
-             }
              throw new Error(`Failed to negotiate realtime connection: ${res.statusText}`);
           }
           const data = await res.json();
