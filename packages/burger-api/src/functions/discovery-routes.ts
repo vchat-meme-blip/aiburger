@@ -69,56 +69,53 @@ app.http('discovery-search', {
         }
 
         // 2. Search External (Uber Eats)
-        try {
-            let token = 'mock_token'; 
-            if (userId) {
-                const tokenData = await db.getUserToken(userId, 'uber');
-                if (tokenData?.access_token) token = tokenData.access_token;
-            }
-
-            const uberData = (await uberClient.searchRestaurants(token, lat, long)) as UberSearchResponse;
-            
-            if (uberData && uberData.stores) {
-                for (const store of uberData.stores) {
-                    if (store.menu) {
-                        for (const item of store.menu) {
-                             const score = scoreItem(item, queryTerms);
-                             if (score > 0) {
-                                 results.push({
-                                     type: 'external',
-                                     source: store.name,
-                                     id: item.id,
-                                     name: item.name,
-                                     description: item.description,
-                                     price: item.price,
-                                     image_url: store.image_url, // Use store image as fallback
-                                     score: score,
-                                     url: store.url,
-                                     promo: store.promo // inherit store promo
-                                 });
-                             }
+        if (userId) {
+            try {
+                // Pass userId directly, let client handle token retrieval/refresh
+                const uberData = (await uberClient.searchRestaurants(userId, lat, long)) as UberSearchResponse;
+                
+                if (uberData && uberData.stores) {
+                    for (const store of uberData.stores) {
+                        if (store.menu) {
+                            for (const item of store.menu) {
+                                 const score = scoreItem(item, queryTerms);
+                                 if (score > 0) {
+                                     results.push({
+                                         type: 'external',
+                                         source: store.name,
+                                         id: item.id,
+                                         name: item.name,
+                                         description: item.description,
+                                         price: item.price,
+                                         image_url: store.image_url, // Use store image as fallback
+                                         score: score,
+                                         url: store.url,
+                                         promo: store.promo // inherit store promo
+                                     });
+                                 }
+                            }
+                        }
+                        // Also score the store itself if the query is generic (e.g. "Burgers")
+                        const storeScore = scoreItem({ ...store, tags: ['restaurant'] }, queryTerms);
+                        if (storeScore > 0) {
+                             results.push({
+                                 type: 'external_store',
+                                 source: 'Uber Eats',
+                                 id: store.id,
+                                 name: store.name,
+                                 description: `ETA: ${store.eta} mins • ${store.rating} ⭐`,
+                                 price: 0, // Not applicable
+                                 image_url: store.image_url,
+                                 score: storeScore * 0.8, // Lower priority than specific items
+                                 url: store.url,
+                                 promo: store.promo
+                             });
                         }
                     }
-                    // Also score the store itself if the query is generic (e.g. "Burgers")
-                    const storeScore = scoreItem({ ...store, tags: ['restaurant'] }, queryTerms);
-                    if (storeScore > 0) {
-                         results.push({
-                             type: 'external_store',
-                             source: 'Uber Eats',
-                             id: store.id,
-                             name: store.name,
-                             description: `ETA: ${store.eta} mins • ${store.rating} ⭐`,
-                             price: 0, // Not applicable
-                             image_url: store.image_url,
-                             score: storeScore * 0.8, // Lower priority than specific items
-                             url: store.url,
-                             promo: store.promo
-                         });
-                    }
                 }
+            } catch (e) {
+                context.warn('Failed to search Uber (User might not be connected):', e);
             }
-        } catch (e) {
-            context.warn('Failed to search Uber:', e);
         }
 
         // 3. Sort by Score

@@ -1,9 +1,9 @@
+
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { UberClient } from '../uber-client.js';
+import { UberClient, UberSearchResponse } from '../uber-client.js';
 import { DbService } from '../db-service.js';
 import process from 'node:process';
 import crypto from 'node:crypto';
-import { UberSearchResponse } from '../uber-client.js';
 
 const uberClient = new UberClient();
 
@@ -19,7 +19,7 @@ app.http('uber-login', {
         if (!userId) {
             return { status: 400, body: 'Missing userId' };
         }
-
+        
         // Generate the Uber Auth URL
         const loginUrl = uberClient.getLoginUrl(userId);
         context.log(`Generated Login URL: ${loginUrl}`);
@@ -72,10 +72,10 @@ app.http('uber-callback', {
 
         if (error) {
             context.error(`Uber Auth Error Param: ${error}`);
-            return {
-                status: 400,
+            return { 
+                status: 400, 
                 headers: { 'Content-Type': 'text/html' },
-                body: `<h1>Connection Failed</h1><p>Uber returned an error: ${error}</p>`
+                body: `<h1>Connection Failed</h1><p>Uber returned an error: ${error}</p>` 
             };
         }
 
@@ -189,21 +189,18 @@ app.http('uber-nearby', {
             return { status: 400, jsonBody: { error: 'Missing userId, lat, or long' } };
         }
 
-        const db = await DbService.getInstance();
-        const tokenData = await db.getUserToken(userId, 'uber');
-
-        if (!tokenData || !tokenData.access_token) {
-            context.warn(`User ${userId} tried to search but is not connected to Uber.`);
-            return { status: 401, jsonBody: { error: 'User not connected to Uber. Please login first.' } };
-        }
-
         try {
-            const results = (await uberClient.searchRestaurants(tokenData.access_token, lat, long)) as UberSearchResponse;
+            // Pass userId directly, allow client to handle token retrieval/refresh/fallback
+            const results = (await uberClient.searchRestaurants(userId, lat, long)) as UberSearchResponse;
             context.log(`Found ${results.stores?.length ?? 0} restaurants for user ${userId}`);
             return { status: 200, jsonBody: results };
         } catch (err: any) {
             context.error('Uber Nearby Search Failed', err);
-            return { status: 502, jsonBody: { error: 'Failed to fetch nearby restaurants from Uber' } };
+            
+            const isAuthError = err.message.includes('Unauthorized') || err.message.includes('not connected');
+            const status = isAuthError ? 401 : 502;
+            
+            return { status, jsonBody: { error: err.message } };
         }
     }
 });

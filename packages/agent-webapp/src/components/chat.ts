@@ -11,6 +11,8 @@ import { RealtimeService } from '../services/realtime.service.js';
 import sendSvg from '../../assets/icons/send.svg?raw';
 import questionSvg from '../../assets/icons/question.svg?raw';
 import newChatSvg from '../../assets/icons/new-chat.svg?raw';
+import historySvg from '../../assets/icons/clock.svg?raw'; // Reusing clock for history
+import dashboardSvg from '../../assets/icons/person.svg?raw'; // Reusing person for dashboard
 import './debug.js';
 
 const locationSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
@@ -144,6 +146,17 @@ export class ChatComponent extends LitElement {
     this.messages = [];
     this.sessionId = '';
     this.fireMessagesUpdatedEvent();
+  }
+
+  onHistoryClicked() {
+      // Dispatch global event for history component to toggle
+      window.dispatchEvent(new CustomEvent('azc-toggle-history'));
+  }
+
+  onDashboardClicked() {
+      // Open user card modal
+      const card = document.querySelector('azc-user-card') as any;
+      if(card) card.openModal();
   }
 
   async onKeyPressed(event: KeyboardEvent) {
@@ -346,6 +359,42 @@ export class ChatComponent extends LitElement {
     }
   }
 
+  protected renderHeader = () => html`
+    <header class="chat-header">
+        <div class="header-title">
+            <span class="brand-icon">🍔</span>
+            <span>Chicha AI</span>
+        </div>
+        <div class="header-actions">
+            <button 
+                class="header-btn" 
+                title="Dashboard" 
+                @click=${this.onDashboardClicked}
+            >
+                ${unsafeSVG(dashboardSvg)}
+                <span class="btn-label">Dashboard</span>
+            </button>
+            <button 
+                class="header-btn" 
+                title="Chat History"
+                @click=${this.onHistoryClicked}
+            >
+                ${unsafeSVG(historySvg)}
+                <span class="btn-label">History</span>
+            </button>
+            <button 
+                class="header-btn primary" 
+                title="New Chat"
+                @click=${() => this.onNewChatClicked()}
+                ?disabled=${this.isLoading}
+            >
+                ${unsafeSVG(newChatSvg)}
+                <span class="btn-label">New Chat</span>
+            </button>
+        </div>
+    </header>
+  `;
+
   protected renderSuggestions = (suggestions: string[]) => html`
     <section class="suggestions-container">
       <h2>${this.options.strings.promptSuggestionsTitle}</h2>
@@ -413,14 +462,6 @@ export class ChatComponent extends LitElement {
 
   protected renderChatInput = () => html`
     <div class="chat-input">
-      <button
-        class="button new-chat-button"
-        @click=${() => { this.onNewChatClicked(); }}
-        title=${this.options.strings.newChatButton}
-        .disabled=${this.messages?.length === 0 || this.isLoading || this.isStreaming}
-      >
-        ${unsafeSVG(newChatSvg)}
-      </button>
       <form class="input-form">
         <button
           class="location-button ${this.userLocation ? 'active' : ''} ${this.isGettingLocation ? 'loading' : ''}"
@@ -456,11 +497,14 @@ export class ChatComponent extends LitElement {
     const parsedMessages = this.messages.map((message) => parseMessageIntoHtml(message, this.options.enableMarkdown));
     return html`
       <section class="chat-container">
+        ${this.renderHeader()}
+        
         ${this.options.enablePromptSuggestions &&
         this.options.promptSuggestions.length > 0 &&
         this.messages.length === 0
           ? this.renderSuggestions(this.options.promptSuggestions)
           : nothing}
+          
         <div class="messages">
           ${repeat(parsedMessages, (_, index) => index, this.renderMessage)} ${this.renderLoader()}
           ${this.hasError ? this.renderError() : nothing}
@@ -549,9 +593,73 @@ export class ChatComponent extends LitElement {
         cursor: pointer;
       }
     }
+    
+    /* --- Header --- */
+    .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 2rem;
+        background: rgba(255,255,255,0.85);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .header-title {
+        font-family: 'Sofia Sans Condensed', sans-serif;
+        font-weight: 700;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #333;
+    }
+    .brand-icon { font-size: 1.4rem; }
+    
+    .header-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .header-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        padding: 8px 12px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #666;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+    .header-btn:hover {
+        background: rgba(0,0,0,0.05);
+        color: #333;
+    }
+    .header-btn svg { width: 18px; height: 18px; }
+    
+    .header-btn.primary {
+        background: var(--azc-new-chat-button-bg);
+        color: white;
+    }
+    .header-btn.primary:hover {
+        background: var(--azc-new-chat-button-bg-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(255, 87, 34, 0.3);
+    }
+    
+    @media (max-width: 600px) {
+        .btn-label { display: none; }
+        .chat-header { padding: 0.8rem 1rem; }
+    }
+    
     .chat-container {
       height: 100%;
-      overflow: auto;
+      overflow: hidden; /* Scroll is inside messages */
       container-type: inline-size;
       position: relative;
       background: var(--bg);
@@ -565,6 +673,7 @@ export class ChatComponent extends LitElement {
       display: flex;
       flex-direction: column;
     }
+    
     .suggestions-container {
       text-align: center;
       padding: var(--space-xl);
@@ -604,6 +713,7 @@ export class ChatComponent extends LitElement {
       gap: var(--space-md);
       flex: 1;
       overflow-y: auto;
+      scroll-behavior: smooth;
     }
     .user {
       align-self: end;
@@ -863,20 +973,6 @@ export class ChatComponent extends LitElement {
       box-shadow: 0 calc(-1 * var(--space-md)) var(--space-md) var(--bg);
       display: flex;
       gap: var(--space-md);
-    }
-    .new-chat-button {
-      flex: 0 0 auto;
-      width: 48px;
-      height: 48px;
-      padding: var(--space-md);
-      border-radius: 50%;
-      background: var(--new-chat-button-bg);
-      color: var(--new-chat-button-color);
-      font-size: 1.5rem;
-      &:hover:not(:disabled) {
-        background: var(--new-chat-button-bg-hover);
-        color: var(--new-chat-button-color);
-      }
     }
     .input-form {
       display: flex;
