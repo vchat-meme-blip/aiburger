@@ -52,9 +52,14 @@ export class UberClient {
     // Docs: "Always match your token domain with your API domain"
     // Docs: "Testing Applications: https://sandbox-auth.uber.com"
 
-    this.authUrl = 'https://login.uber.com/oauth/v2/authorize'; // UI still uses login.uber.com
-    this.tokenUrl = 'https://sandbox-auth.uber.com/oauth/v2/token'; // Backend token exchange uses sandbox
-    this.apiUrl = 'https://test-api.uber.com/v1'; // API calls use test-api
+    // 1. User Login (Browser) always goes to the main domain
+    this.authUrl = 'https://login.uber.com/oauth/v2/authorize';
+
+    // 2. Token Exchange (Backend) MUST use sandbox-auth to get auto-scopes
+    this.tokenUrl = 'https://sandbox-auth.uber.com/oauth/v2/token';
+
+    // 3. API Calls MUST use test-api
+    this.apiUrl = 'https://test-api.uber.com/v1';
 
     // Allow override for production via Env Var later
     if (process.env.UBER_ENV === 'production') {
@@ -80,7 +85,7 @@ export class UberClient {
     }
 
     // In Sandbox mode, these scopes are auto-granted by the backend
-    // regardless of what the dashboard says.
+    // because we are using the sandbox-auth endpoint for exchange.
     const scopes = ['eats.store.search', 'eats.order', 'profile'];
 
     const params = new URLSearchParams({
@@ -184,6 +189,7 @@ export class UberClient {
        console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
 
        // Fallback for demo: If sandbox is empty or returns 404 (no stores provisioned), use Mock.
+       // This ensures the agent demo works even if Uber Sandbox is empty.
        return this.getMockRestaurants();
     }
 
