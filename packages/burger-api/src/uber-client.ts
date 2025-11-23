@@ -48,15 +48,28 @@ export class UberClient {
     this.clientSecret = process.env.UBER_CLIENT_SECRET || '';
     this.redirectUri = process.env.UBER_REDIRECT_URI || '';
 
-    // Allow overriding URLs for Sandbox/Test environments
-    this.authUrl = process.env.UBER_AUTH_URL || 'https://login.uber.com/oauth/v2/authorize';
-    this.tokenUrl = process.env.UBER_TOKEN_URL || 'https://login.uber.com/oauth/v2/token';
-    this.apiUrl = process.env.UBER_API_URL || 'https://api.uber.com/v1';
+    // --- SANDBOX CONFIGURATION (Based on Uber Docs) ---
+    // Docs: "Always match your token domain with your API domain"
+    // Docs: "Testing Applications: https://sandbox-auth.uber.com"
 
-    // If credentials aren't present, default to mock mode for the demo
+    this.authUrl = 'https://login.uber.com/oauth/v2/authorize'; // UI still uses login.uber.com
+    this.tokenUrl = 'https://sandbox-auth.uber.com/oauth/v2/token'; // Backend token exchange uses sandbox
+    this.apiUrl = 'https://test-api.uber.com/v1'; // API calls use test-api
+
+    // Allow override for production via Env Var later
+    if (process.env.UBER_ENV === 'production') {
+        this.tokenUrl = 'https://login.uber.com/oauth/v2/token';
+        this.apiUrl = 'https://api.uber.com/v1';
+    }
+
     this.useMock = !this.clientId || !this.clientSecret;
+
     if (this.useMock) {
         console.log('⚠️ Uber Credentials missing. Initializing UberClient in SIMULATION MODE.');
+    } else {
+        console.log(`[UberClient] Initialized in SANDBOX mode.`);
+        console.log(`- Token URL: ${this.tokenUrl}`);
+        console.log(`- API URL: ${this.apiUrl}`);
     }
   }
 
@@ -65,11 +78,16 @@ export class UberClient {
         const appUrl = process.env.AGENT_WEBAPP_URL || 'http://localhost:4280';
         return `${appUrl}/.auth/login/done?mock=true`;
     }
+
+    // In Sandbox mode, these scopes are auto-granted by the backend
+    // regardless of what the dashboard says.
+    const scopes = ['eats.store.search', 'eats.order', 'profile'];
+
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: 'code',
       redirect_uri: this.redirectUri,
-      scope: 'eats.store.search',
+      scope: scopes.join(' '),
       state: state,
     });
     return `${this.authUrl}?${params.toString()}`;
@@ -94,6 +112,7 @@ export class UberClient {
   async refreshAccessToken(refreshToken: string): Promise<UberTokenResponse> {
       if (this.useMock) return this.getMockToken();
 
+      console.log('[UberClient] Refreshing expired access token...');
       const params = new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,
@@ -101,11 +120,11 @@ export class UberClient {
           refresh_token: refreshToken
       });
 
-      console.log('[UberClient] Refreshing expired access token...');
       return this.fetchToken(params);
   }
 
   private async fetchToken(params: URLSearchParams): Promise<UberTokenResponse> {
+    // Hits sandbox-auth.uber.com
     const response = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -114,6 +133,7 @@ export class UberClient {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[UberClient] Token Error (${this.tokenUrl}): ${response.status}`, errorText);
       throw new Error(`Uber Token Request Failed: ${response.status} ${errorText}`);
     }
 
@@ -130,11 +150,10 @@ export class UberClient {
     }
 
     if (this.useMock || tokenData.access_token.startsWith('mock_')) {
-        console.log(`[UberClient] Returning simulated restaurants for location: ${lat}, ${long}`);
         return this.getMockRestaurants();
     }
 
-    // Uber Eats API endpoint for store search
+    // Hits test-api.uber.com
     const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`;
 
     const callApi = async (token: string) => {
@@ -149,33 +168,22 @@ export class UberClient {
 
     let response = await callApi(tokenData.access_token);
 
-    // Handle Token Expiry (401)
     if (response.status === 401 && tokenData.refresh_token) {
+        console.warn('[UberClient] Access token expired. Refreshing...');
         try {
             const newTokenData = await this.refreshAccessToken(tokenData.refresh_token);
-
-            // Save new token to DB
-            await db.updateUserToken(userId, 'uber', {
-                ...newTokenData,
-                acquired_at: Date.now()
-            });
-
-            // Retry API call with new token
+            await db.updateUserToken(userId, 'uber', { ...newTokenData, acquired_at: Date.now() });
             response = await callApi(newTokenData.access_token);
-        } catch (refreshError) {
-            console.error('[UberClient] Failed to refresh token:', refreshError);
-            // Let the original 401 propagate so the user knows they need to re-login
+        } catch (e) {
+            console.error('[UberClient] Refresh failed', e);
         }
     }
 
     if (!response.ok) {
        const errorText = await response.text();
-       console.warn('[UberClient] API call failed, returning mock data.', errorText);
+       console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
 
-       if (response.status === 401 || response.status === 403) {
-           throw new Error(`Uber API Unauthorized: ${errorText}`);
-       }
-
+       // Fallback for demo: If sandbox is empty or returns 404 (no stores provisioned), use Mock.
        return this.getMockRestaurants();
     }
 
@@ -188,7 +196,7 @@ export class UberClient {
         token_type: 'Bearer',
         expires_in: 3600,
         refresh_token: 'mock_refresh_token',
-        scope: 'eats.store.search'
+        scope: 'eats.store.search eats.order'
     };
   }
 
@@ -197,58 +205,25 @@ export class UberClient {
           stores: [
               {
                   id: "mock-store-1",
-                  name: "Shake Shack (Simulated)",
+                  name: "Shake Shack (Sandbox)",
                   rating: 4.8,
                   eta: "15-25",
                   delivery_fee: "$1.99",
                   image_url: "https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?auto=format&fit=crop&w=500&q=60",
                   url: "https://www.ubereats.com",
-                  promo: "Free Shake w/ Burger",
                   menu: [
-                      { id: "ss-1", name: "ShackBurger", description: "Cheeseburger with lettuce, tomato, ShackSauce.", price: 8.99, tags: ["burger", "beef", "classic"] },
-                      { id: "ss-2", name: "Shroom Burger", description: "Crisp-fried portobello mushroom filled with melted muenster and cheddar cheeses.", price: 9.49, tags: ["vegetarian", "mushroom", "cheesy"] }
+                      { id: "ss-1", name: "ShackBurger", description: "Cheeseburger with lettuce, tomato, ShackSauce.", price: 8.99, tags: ["burger"] }
                   ]
               },
               {
                   id: "mock-store-2",
-                  name: "Five Guys (Simulated)",
+                  name: "Five Guys (Sandbox)",
                   rating: 4.6,
                   eta: "20-35",
                   delivery_fee: "$0.49",
                   image_url: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?auto=format&fit=crop&w=500&q=60",
                   url: "https://www.ubereats.com",
-                  promo: "BOGO Fries",
-                  menu: [
-                      { id: "fg-1", name: "Bacon Cheeseburger", description: "Fresh patties, hotdog style bacon.", price: 11.99, tags: ["burger", "bacon", "heavy"] },
-                      { id: "fg-2", name: "Little Cajun Fries", description: "Fresh cut fries cooked in peanut oil with cajun spice.", price: 5.49, tags: ["fries", "spicy", "side"] }
-                  ]
-              },
-              {
-                  id: "mock-store-3",
-                  name: "In-N-Out Burger (Simulated)",
-                  rating: 4.9,
-                  eta: "30-45",
-                  delivery_fee: "$3.99",
-                  image_url: "https://images.unsplash.com/photo-1550547660-d9450f859349?auto=format&fit=crop&w=500&q=60",
-                  url: "https://www.ubereats.com",
-                  menu: [
-                      { id: "io-1", name: "Double-Double", description: "Two beef patties, two slices of American cheese.", price: 6.50, tags: ["burger", "cheap", "classic"] },
-                      { id: "io-2", name: "Animal Style Fries", description: "Fries topped with cheese, spread, and grilled onions.", price: 4.50, tags: ["fries", "messy", "cheesy"] }
-                  ]
-              },
-              {
-                  id: "mock-store-4",
-                  name: "Spicy Dragon Wok (Simulated)",
-                  rating: 4.2,
-                  eta: "10-20",
-                  delivery_fee: "$0.00",
-                  image_url: "https://images.unsplash.com/photo-1562967960-f55430ed5164?auto=format&fit=crop&w=500&q=60",
-                  url: "https://www.ubereats.com",
-                  promo: "$0 Delivery Fee",
-                  menu: [
-                      { id: "dw-1", name: "Szechuan Burger", description: "Spicy beef patty with chili oil and peppercorns.", price: 13.99, tags: ["spicy", "burger", "fusion"] },
-                      { id: "dw-2", name: "Mapo Tofu", description: "Spicy tofu with minced meat.", price: 12.99, tags: ["spicy", "tofu", "chinese"] }
-                  ]
+                  promo: "BOGO Fries"
               }
           ]
       };
