@@ -25,7 +25,6 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
         // Use utf-8 to ensure special characters in names/IDs are parsed correctly
         const token = Buffer.from(header, 'base64').toString('utf-8');
         const infos = token && JSON.parse(token);
-        // Check multiple fields for the ID depending on the provider (AAD, GitHub, Google)
         return infos?.userId || infos?.sub || infos?.userDetails;
     }
   } catch (error) {
@@ -36,16 +35,18 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
   // 1. Priority: Explicit Query Param (Used by Client)
-  let queryId = request.query.get('userId');
+  // Fix: Allow null (returned by get) or undefined
+  let queryId: string | null | undefined = request.query.get('userId');
 
-  // Fallback: Manually parse URL if request.query is empty or failed
-  // This handles cases where SWA or proxies might mess with the standard query parsing
-  if (!queryId && request.url && request.url.includes('userId=')) {
-      try {
-          const urlObj = new URL(request.url);
-          queryId = urlObj.searchParams.get('userId');
-      } catch (e) {
-          console.warn('[Auth] Failed to manual parse URL for userId', e);
+  // Debug logging for diagnosis
+  if (!queryId) {
+      // If request.query is empty, try manual parse (rare edge case in some proxy setups)
+      if (request.url && request.url.includes('userId=')) {
+          try {
+              const urlObj = new URL(request.url);
+              queryId = urlObj.searchParams.get('userId');
+              if (queryId) console.log(`[Auth] Recovered userId from URL string: ${queryId}`);
+          } catch {}
       }
   }
 
@@ -54,7 +55,6 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
   }
 
   // 2. Priority: Body Context (Used in Chat POST)
-  // Check both nested context and top-level userId
   const bodyId = body?.context?.userId || body?.userId;
   if (bodyId) {
       return bodyId;
@@ -66,14 +66,12 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
     // IMPORTANT: The ID must be hashed to match how it's stored in the DB/Frontend
     const id = createHash('sha256').update(authUserId).digest('hex').slice(0, 32);
     
-    // Verify existence (lazy creation handled by /me-get)
     try {
         const db = await UserDbService.getInstance();
         const user = await db.getUserById(id);
         if (user) {
             return user.id;
         }
-        // If not found in DB yet, return the hash so downstream can try to use it or fail gracefully
         return id;
     } catch (e) {
         console.warn(`[Auth] DB lookup failed for ${id}, using hash directly.`, e);
@@ -81,5 +79,7 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
     }
   }
 
+  // Detailed failure log
+  console.warn(`[Auth] Failed to resolve UserID. URL: ${request.url}, Headers: ${Array.from(request.headers.keys()).join(',')}`);
   return undefined;
 }

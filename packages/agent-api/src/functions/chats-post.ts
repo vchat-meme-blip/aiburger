@@ -48,11 +48,9 @@ const titleSystemPrompt = `Create a short, punchy title for this chat session (m
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('[chats-post] Processing POST request');
   
-  // Config Diagnosis Logging
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
-  const azureModelName = process.env.AZURE_OPENAI_MODEL;
   
   const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
   const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
@@ -61,34 +59,29 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const requestBody = (await request.json()) as AIChatCompletionRequest;
     const { messages, context: chatContext } = requestBody;
 
-    context.log('[chats-post] Resolving user ID...');
     const userId = await getInternalUserId(request, requestBody);
     
     if (!userId) {
-      // Log headers (safely) to help debug why auth might be failing
-      const headers: Record<string, string> = {};
-      for (const [key, value] of request.headers) {
-          if(key.toLowerCase() !== 'authorization') {
-             headers[key] = value;
-          }
+      const hasAuthHeader = request.headers.has('x-ms-client-principal');
+      if (!hasAuthHeader) {
+          context.warn('[chats-post] CRITICAL: SWA Auth header missing. Request likely bypassed the proxy.');
       }
-      context.warn('[chats-post] Failed to resolve user ID. Headers:', JSON.stringify(headers));
-      
+
       return {
         status: 400,
         jsonBody: {
-          error: 'Invalid or missing userId. Please ensure you are logged in and the client is sending the ID.',
+          error: 'Invalid or missing userId. Please ensure you are logged in.',
+          details: hasAuthHeader ? 'Header present but invalid' : 'Missing SWA Auth header'
         },
       };
     }
     context.log(`[chats-post] User resolved: ${userId}`);
 
     if (messages?.length === 0 || !messages[messages.length - 1]?.content) {
-      context.warn('[chats-post] Invalid messages array in request body');
       return {
         status: 400,
         jsonBody: {
-          error: 'Invalid request: "messages" array must not be empty and the last message must have content.',
+          error: 'Invalid request: "messages" array must not be empty.',
         },
       };
     }
@@ -96,25 +89,22 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const sessionId = ((chatContext as any)?.sessionId as string) || randomUUID();
     const userLocation = chatContext?.location;
 
-    context.log(`[chats-post] Session: ${sessionId}, Location: ${userLocation ? 'Yes' : 'No'}`);
-
+    // Validate AI Config
     if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
-      const errorMessage = 'Missing required environment variables: AZURE_OPENAI_API_ENDPOINT (or OPENAI_API_KEY/AZURE_OPENAI_API_KEY) or BURGER_MCP_URL';
-      context.error(errorMessage);
       return {
         status: 500,
         jsonBody: {
-          error: errorMessage,
+          error: 'Missing AI configuration (Endpoint or Keys).',
         },
       };
     }
 
     let model: ChatOpenAI | AzureChatOpenAI;
-    // Prefer explicit model name, fallback to gpt-4o-mini
     const modelName = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? 'gpt-4o-mini';
+    const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview";
 
-    if (openAiApiKey) {
-      context.log('[chats-post] Using Standard OpenAI client');
+    if (openAiApiKey && !azureOpenAiEndpoint) {
+      context.log(`[chats-post] Using Standard OpenAI client. Model: ${modelName}`);
       model = new ChatOpenAI({
         apiKey: openAiApiKey,
         configuration: openAiBaseUrl ? { baseURL: openAiBaseUrl } : undefined,
@@ -122,12 +112,13 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
-      context.log('[chats-post] Using Azure OpenAI with Managed Identity');
-      // Use AzureChatOpenAI to correctly handle Resource URL + Deployment Name
+      context.log(`[chats-post] Using Azure OpenAI (Managed Identity). Endpoint: ${azureOpenAiEndpoint}`);
+      context.log(`[chats-post] Configuration - Deployment: ${modelName}, API Version: ${apiVersion}`);
+      
       model = new AzureChatOpenAI({
-        azureOpenAIEndpoint: azureOpenAiEndpoint, // This expects the resource URL (e.g., https://my-res.openai.azure.com/)
-        azureOpenAIApiDeploymentName: modelName,     // This is the deployment name
-        azureOpenAIApiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-05-01-preview",
+        azureOpenAIEndpoint: azureOpenAiEndpoint,
+        azureOpenAIApiDeploymentName: modelName,
+        azureOpenAIApiVersion: apiVersion,
         azureADTokenProvider: getAzureOpenAiTokenProvider(),
         streaming: true,
       });
@@ -150,14 +141,12 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     await client.connect(transport);
 
     const tools = await loadMcpTools('burger', client);
-    context.log(`[chats-post] Loaded ${tools.length} tools`);
-
+    
     const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
-
     let currentSystemPrompt = agentSystemPrompt.replace('<LOGIN_URL>', loginUrl);
     
     if (userLocation) {
-        currentSystemPrompt += `\n\n[SYSTEM NOTE]: User is currently located at Latitude: ${userLocation.lat}, Longitude: ${userLocation.long}. Use these coordinates for search_nearby_restaurants. Do not ask for location again.`;
+        currentSystemPrompt += `\n\n[SYSTEM NOTE]: User is currently located at Latitude: ${userLocation.lat}, Longitude: ${userLocation.long}. Use these coordinates.`;
     }
 
     const agent = createAgent({
@@ -187,11 +176,13 @@ export async function postChats(request: HttpRequest, context: InvocationContext
               ['system', titleSystemPrompt],
               ['human', question],
             ]);
-            context.log(`Generated title: ${response.text}`);
             chatHistory.setContext({ title: response.text });
           }
-      } catch (e) {
-          context.warn('Failed to generate session title', e);
+      } catch (e: any) {
+          context.warn('Failed to generate session title (non-fatal):', e.message);
+          if (e.message?.includes('404')) {
+             context.warn('HINT: This 404 usually means the Deployment Name in Azure OpenAI does not match the environment variable AZURE_OPENAI_MODEL.');
+          }
       }
     };
 
@@ -202,7 +193,6 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         if (content) {
           await chatHistory.addMessage(new HumanMessage(question));
           await chatHistory.addMessage(new AIMessage(content));
-          context.log('Chat history updated');
           await sessionTitlePromise;
         }
         await client.close();
@@ -211,7 +201,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       }
     };
 
-    const jsonStream = Readable.from(createJsonStream(responseStream, sessionId, onResponseComplete));
+    const jsonStream = Readable.from(createJsonStream(responseStream, sessionId, onResponseComplete, context));
 
     return {
       headers: {
@@ -237,86 +227,99 @@ async function* createJsonStream(
   chunks: AsyncIterable<StreamEvent>,
   sessionId: string,
   onComplete: (responseContent: string) => Promise<void>,
+  context: InvocationContext
 ) {
-  for await (const chunk of chunks) {
-    const { data } = chunk;
-    let responseChunk: AIChatCompletionDelta | undefined;
+  try {
+    for await (const chunk of chunks) {
+      const { data } = chunk;
+      let responseChunk: AIChatCompletionDelta | undefined;
 
-    if (chunk.event === 'on_chat_model_end' && data.output?.content.length > 0) {
-      const content = data?.output.content[0].text ?? data.output.content ?? '';
-      await onComplete(content);
-    } else if (chunk.event === 'on_chat_model_stream' && data.chunk.content.length > 0) {
-      responseChunk = {
-        delta: {
-          content: data.chunk.content[0].text ?? data.chunk.content,
-          role: 'assistant',
-        },
-      };
-    } else if (chunk.event === 'on_chat_model_end') {
-      responseChunk = {
-        delta: {
-          context: {
-            intermediateSteps: [
-              {
+      if (chunk.event === 'on_chat_model_end' && data.output?.content.length > 0) {
+        const content = data?.output.content[0].text ?? data.output.content ?? '';
+        await onComplete(content);
+      } else if (chunk.event === 'on_chat_model_stream' && data.chunk.content.length > 0) {
+        responseChunk = {
+          delta: {
+            content: data.chunk.content[0].text ?? data.chunk.content,
+            role: 'assistant',
+          },
+        };
+      } else if (chunk.event === 'on_chat_model_end') {
+        responseChunk = {
+          delta: {
+            context: {
+              intermediateSteps: [
+                {
+                  type: 'llm',
+                  name: chunk.name,
+                  input: data.input ? JSON.stringify(data.input) : undefined,
+                  output:
+                    data?.output.content.length > 0
+                      ? JSON.stringify(data?.output.content)
+                      : JSON.stringify(data?.output.tool_calls),
+                },
+              ],
+            },
+          },
+        };
+      } else if (chunk.event === 'on_tool_end') {
+        responseChunk = {
+          delta: {
+            context: {
+              intermediateSteps: [
+                {
+                  type: 'tool',
+                  name: chunk.name,
+                  input: data?.input?.input ?? undefined,
+                  output: data?.output.content ?? undefined,
+                },
+              ],
+            },
+          },
+        };
+      } else if (chunk.event === 'on_chat_model_start') {
+        responseChunk = {
+          delta: {
+            context: {
+              currentStep: {
                 type: 'llm',
                 name: chunk.name,
-                input: data.input ? JSON.stringify(data.input) : undefined,
-                output:
-                  data?.output.content.length > 0
-                    ? JSON.stringify(data?.output.content)
-                    : JSON.stringify(data?.output.tool_calls),
+                input: data?.input ?? undefined,
               },
-            ],
+            },
           },
-        },
-      };
-    } else if (chunk.event === 'on_tool_end') {
-      responseChunk = {
-        delta: {
-          context: {
-            intermediateSteps: [
-              {
+          context: { sessionId },
+        };
+      } else if (chunk.event === 'on_tool_start') {
+        responseChunk = {
+          delta: {
+            context: {
+              currentStep: {
                 type: 'tool',
                 name: chunk.name,
-                input: data?.input?.input ?? undefined,
-                output: data?.output.content ?? undefined,
+                input: data?.input?.input ? JSON.stringify(data.input?.input) : undefined,
               },
-            ],
-          },
-        },
-      };
-    } else if (chunk.event === 'on_chat_model_start') {
-      responseChunk = {
-        delta: {
-          context: {
-            currentStep: {
-              type: 'llm',
-              name: chunk.name,
-              input: data?.input ?? undefined,
             },
           },
-        },
-        context: { sessionId },
-      };
-    } else if (chunk.event === 'on_tool_start') {
-      responseChunk = {
-        delta: {
-          context: {
-            currentStep: {
-              type: 'tool',
-              name: chunk.name,
-              input: data?.input?.input ? JSON.stringify(data.input?.input) : undefined,
-            },
-          },
-        },
-      };
-    }
+        };
+      }
 
-    if (!responseChunk) {
-      continue;
-    }
+      if (!responseChunk) {
+        continue;
+      }
 
-    yield JSON.stringify(responseChunk) + '\n';
+      yield JSON.stringify(responseChunk) + '\n';
+    }
+  } catch (e: any) {
+      context.error('Error during stream generation:', e);
+      // Send an error chunk to the client so it knows to stop spinning
+      const errorChunk = {
+          delta: {
+              content: `\n\n**Error:** ${e.message || 'An error occurred while communicating with the AI service.'}\n\n*Admin Note: Check if the Azure OpenAI Deployment Name matches the configuration.*`,
+              role: 'assistant'
+          }
+      };
+      yield JSON.stringify(errorChunk) + '\n';
   }
 }
 

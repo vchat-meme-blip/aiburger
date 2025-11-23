@@ -185,7 +185,8 @@ export class DbService {
         const querySpec = {
           query: 'SELECT * FROM c',
         };
-        const { resources } = await this.burgersContainer!.items.query(querySpec).fetchAll();
+        // Enable cross-partition query to avoid warnings/errors
+        const { resources } = await this.burgersContainer!.items.query(querySpec, { forceQueryPlan: true }).fetchAll();
         return (resources as Burger[]).map(stripUnderscoreProperties);
       } catch (error) {
         console.error('Error fetching burgers from Cosmos DB:', error);
@@ -217,7 +218,8 @@ export class DbService {
         const querySpec = {
           query: 'SELECT * FROM c',
         };
-        const { resources } = await this.toppingsContainer!.items.query(querySpec).fetchAll();
+        // Enable cross-partition query to avoid warnings/errors
+        const { resources } = await this.toppingsContainer!.items.query(querySpec, { forceQueryPlan: true }).fetchAll();
         return (resources as Topping[]).map(stripUnderscoreProperties);
       } catch (error) {
         console.error('Error fetching toppings from Cosmos DB:', error);
@@ -267,8 +269,8 @@ export class DbService {
             query: 'SELECT * FROM c',
           };
         }
-
-        const { resources } = await this.ordersContainer!.items.query(querySpec).fetchAll();
+        // Enable cross-partition query to avoid warnings/errors
+        const { resources } = await this.ordersContainer!.items.query(querySpec, { forceQueryPlan: true }).fetchAll();
         return stripUserId((resources as Order[]).map(stripUnderscoreProperties));
       } catch (error) {
         console.error('Error fetching orders from Cosmos DB:', error);
@@ -492,7 +494,8 @@ export class DbService {
       const querySpec = {
         query: 'SELECT VALUE COUNT(1) FROM c',
       };
-      const { resources } = await this.usersContainer.items.query(querySpec).fetchAll();
+      // Enable cross-partition query
+      const { resources } = await this.usersContainer.items.query(querySpec, { forceQueryPlan: true }).fetchAll();
       return resources[0] || 0;
     } catch (error) {
       console.error('Error counting registered users:', error);

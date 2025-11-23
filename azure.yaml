@@ -1,3 +1,4 @@
+
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 
 name: mcp-agent-langchainjs
@@ -6,21 +7,20 @@ metadata:
 
 services:
   burger-api:
-    project: ./packages/burger-api
+    project: packages/burger-api
     language: ts
     host: function
 
   burger-mcp:
-    project: ./packages/burger-mcp
+    project: packages/burger-mcp
     language: ts
     host: function
 
   burger-webapp:
-    project: ./packages/burger-webapp
+    project: packages/burger-webapp
     dist: dist
     language: ts
     host: staticwebapp
-    # Needed to get the BURGER_API_URL env var set
     hooks:
       predeploy:
         windows:
@@ -31,12 +31,12 @@ services:
           run: npm run build
 
   agent-api:
-    project: ./packages/agent-api
+    project: packages/agent-api
     language: ts
     host: function
 
   agent-webapp:
-    project: ./packages/agent-webapp
+    project: packages/agent-webapp
     dist: dist
     language: ts
     host: staticwebapp

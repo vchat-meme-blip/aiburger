@@ -1,5 +1,7 @@
 import { type AIChatMessage, type AIChatCompletionDelta } from '../models.js';
 
+// Force relative path if VITE_API_URL is not set, or if we are in production
+// This ensures we use the SWA proxy at /api
 export const apiBaseUrl: string = import.meta.env.VITE_API_URL || '';
 
 export type ChatRequestOptions = {
@@ -11,7 +13,10 @@ export type ChatRequestOptions = {
 };
 
 export async function getCompletion(options: ChatRequestOptions) {
+  // If apiBaseUrl is empty, this results in '/api/chats/stream' which is correct for SWA
   const apiUrl = options.apiUrl || apiBaseUrl;
+  console.debug(`[API] Sending chat request to: ${apiUrl}/api/chats/stream`);
+  
   const response = await fetch(`${apiUrl}/api/chats/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,12 +27,13 @@ export async function getCompletion(options: ChatRequestOptions) {
   });
 
   if (response.status > 299 || !response.ok) {
-    let json: JSON | undefined;
+    let json: any;
     try {
       json = await response.json();
     } catch {}
 
-    const error = json?.['error'] ?? response.statusText;
+    const error = json?.error ?? response.statusText;
+    console.error('[API] Chat request failed:', error);
     throw new Error(error);
   }
 

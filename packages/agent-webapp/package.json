@@ -15,7 +15,7 @@
     "dev": "vite --port 5174 --host",
     "build": "npx rimraf staticwebapp.config.json swa-cli.config.json && tsc && vite build",
     "preview": "vite preview",
-    "clean": "npx rimraf dist"
+    "clean": "rimraf dist"
   },
   "author": "Microsoft",
   "license": "MIT",
@@ -30,6 +30,7 @@
     "@types/dompurify": "^3.0.0",
     "@types/node": "^22.18.12",
     "postcss-nesting": "^13.0.2",
+    "rimraf": "^6.0.0",
     "smoke": "^4.1.3",
     "typescript": "^5.7.2",
     "vite": "^7.0.0"

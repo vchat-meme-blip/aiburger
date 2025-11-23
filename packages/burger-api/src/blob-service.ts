@@ -34,13 +34,11 @@ export class BlobService {
         return;
       }
 
-      // Use DefaultAzureCredential for managed identity
       const credential = new DefaultAzureCredential();
 
       this.blobServiceClient = new BlobServiceClient(storageUrl, credential);
       this.containerClient = this.blobServiceClient.getContainerClient(containerName);
 
-      // Check if container exists
       const exists = await this.containerClient.exists();
       if (!exists) {
         console.warn(`Container '${containerName}' does not exist.`);
@@ -50,25 +48,19 @@ export class BlobService {
       this.isInitialized = true;
       console.log('Successfully connected to Azure Blob Storage');
 
-      // Check if images are already uploaded and upload them if needed
       await this.ensureImagesUploaded();
     } catch (error) {
       console.error('Failed to initialize Azure Blob Storage:', error);
-      // Fallback to local
       this.useLocalFallback = true;
     }
   }
 
-  /**
-   * Checks if images exist in blob storage and uploads them if they don't
-   */
   private async ensureImagesUploaded(): Promise<void> {
     if (!this.isInitialized || !this.containerClient) {
       return;
     }
 
     try {
-      // Check if first image exists
       const firstImageName = 'burger-pic-1.jpg';
       const blobClient = this.containerClient.getBlobClient(firstImageName);
       const imageExists = await blobClient.exists();
@@ -84,9 +76,6 @@ export class BlobService {
     }
   }
 
-  /**
-   * Uploads all image files from the data/images directory to blob storage
-   */
   private async uploadAllImages(): Promise<void> {
     if (!this.isInitialized || !this.containerClient) {
       return;
@@ -100,13 +89,11 @@ export class BlobService {
           return;
       }
 
-      // Get all jpg files in the directory
       const allFiles = await fs.readdir(imagesDirectory);
       const imageFiles = allFiles.filter((file) => file.endsWith('.jpg'));
 
       console.log(`Found ${imageFiles.length} images to upload`);
 
-      // Upload all images in parallel
       const { containerClient } = this;
       const uploadPromises = imageFiles.map(async (imageFile) => {
         const filePath = path.join(imagesDirectory!, imageFile);
@@ -131,18 +118,11 @@ export class BlobService {
     }
   }
 
-  /**
-   * Get a blob from Azure Blob Storage or local filesystem if Azure Storage is not configured
-   * @param blobName The name of the blob to retrieve
-   * @returns The blob data as a Buffer or undefined if not found
-   */
   public async getBlob(blobName: string): Promise<Buffer | undefined> {
-    // Check if we should use local fallback
     if (this.useLocalFallback) {
       return this.getLocalFile(blobName);
     }
 
-    // Use Azure Blob Storage when available
     if (!this.isInitialized || !this.containerClient) {
       console.warn('Blob Service not initialized, trying local fallback');
       return this.getLocalFile(blobName);
@@ -151,7 +131,6 @@ export class BlobService {
     try {
       const blobClient = this.containerClient.getBlobClient(blobName);
 
-      // Check if blob exists
       const exists = await blobClient.exists();
       if (!exists) {
         console.warn(`Blob '${blobName}' does not exist in cloud, checking local.`);
@@ -164,7 +143,6 @@ export class BlobService {
         return undefined;
       }
 
-      // Convert stream to buffer
       return await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
         const stream = downloadResponse.readableStreamBody!;
@@ -185,11 +163,6 @@ export class BlobService {
     }
   }
 
-  /**
-   * Check if a path exists in the local filesystem
-   * @param path The path to check
-   * @returns True if the path exists, false otherwise
-   */
   private async pathExists(path: string) {
     try {
       await fs.access(path);
@@ -200,19 +173,18 @@ export class BlobService {
   }
   
   private async findDataDirectory(): Promise<string | undefined> {
-      // Robust search for the data/images directory
-      // This covers local dev, Azure Functions runtime (wwwroot), and compiled dist paths
+      // Candidates for where images might be stored
       const candidates = [
-          // Local dev
+          // 1. Production: Standard Azure Functions wwwroot/dist location
+          path.join(process.cwd(), 'dist', 'data', 'images'),
+          // 2. Production: Fallback if cwd is wwwroot
           path.join(process.cwd(), 'data', 'images'),
-          // Azure Functions production (wwwroot root)
-          path.join(process.cwd(), '..', 'data', 'images'),
-          // Azure Functions production (wwwroot/dist)
-          path.join(__dirname, '..', '..', 'data', 'images'), 
+          // 3. Local Development
+          path.join(__dirname, '..', '..', 'data', 'images'),
+          // 4. Local Development (Alternative)
           path.join(__dirname, '..', 'data', 'images'),
-          // Standard path in Azure Web App
-          process.env.HOME ? path.join(process.env.HOME, 'site', 'wwwroot', 'dist', 'data', 'images') : '',
-          path.join(process.cwd(), 'dist', 'data', 'images')
+          // 5. Explicit Environment path if set
+          process.env.HOME ? path.join(process.env.HOME, 'site', 'wwwroot', 'dist', 'data', 'images') : ''
       ];
       
       for (const dir of candidates) {
@@ -226,11 +198,6 @@ export class BlobService {
       return undefined;
   }
 
-  /**
-   * Get a file from the local filesystem
-   * @param fileName The name of the file to retrieve
-   * @returns The file data as a Buffer or undefined if not found
-   */
   private async getLocalFile(fileName: string): Promise<Buffer | undefined> {
     try {
       const imagesDir = await this.findDataDirectory();
@@ -241,13 +208,11 @@ export class BlobService {
       
       const filePath = path.join(imagesDir, fileName);
       
-      // Check if file exists
       if (!(await this.pathExists(filePath))) {
         console.warn(`Local file '${fileName}' not found at path: ${filePath}`);
         return undefined;
       }
 
-      // Read file
       const fileContent = await fs.readFile(filePath);
       return fileContent;
     } catch (error) {
@@ -256,11 +221,6 @@ export class BlobService {
     }
   }
 
-  /**
-   * Get the content type for a blob based on its file extension
-   * @param blobName The name of the blob
-   * @returns The content type string
-   */
   public getContentType(blobName: string): string {
     const extension = blobName.split('.').pop()?.toLowerCase();
 
