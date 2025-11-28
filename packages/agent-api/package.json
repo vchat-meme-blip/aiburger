@@ -4,6 +4,9 @@
   "description": "Azure Functions API for Contoso Burgers AI Agent",
   "private": true,
   "main": "./dist/src/{tracing.js,functions/*.js}",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
@@ -31,12 +34,11 @@
     "@opentelemetry/instrumentation": "^0.206.0",
     "@opentelemetry/sdk-trace-base": "^2.1.0",
     "@opentelemetry/sdk-trace-node": "^2.0.1",
-    "langchain": "^1.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^22",
-    "azure-functions-core-tools": "^4",
+    "@types/node": "^22.0.0",
+    "azure-functions-core-tools": "^4.0.0",
     "dotenv": "^17.2.1",
-    "typescript": "^5"
+    "langchain": "^1.0.0",
+    "typescript": "^5.0.0",
+    "rimraf": "^6.0.0"
   }
 }

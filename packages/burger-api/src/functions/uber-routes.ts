@@ -1,6 +1,5 @@
-
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { UberClient, UberSearchResponse } from '../uber-client.js';
+import { UberClient } from '../uber-client.js';
 import { DbService } from '../db-service.js';
 import process from 'node:process';
 import crypto from 'node:crypto';
@@ -8,7 +7,6 @@ import crypto from 'node:crypto';
 const uberClient = new UberClient();
 
 // 1. Login Endpoint: Redirects user to Uber via an interstitial page
-// We use HTML instead of 302 Redirect to prevent "Bounce Tracking" protection in browsers
 app.http('uber-login', {
     methods: ['GET'],
     authLevel: 'anonymous',
@@ -67,115 +65,58 @@ app.http('uber-callback', {
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         context.log('Uber Callback Received');
         const code = request.query.get('code');
-        const userId = request.query.get('state'); // We passed userId as state
+        const userId = request.query.get('state');
         const error = request.query.get('error');
 
         if (error) {
             context.error(`Uber Auth Error Param: ${error}`);
             return { 
                 status: 400, 
-                headers: { 'Content-Type': 'text/html' },
-                body: `<h1>Connection Failed</h1><p>Uber returned an error: ${error}</p>` 
+                body: `Uber Authentication Error: ${error}. Please try again.` 
             };
         }
 
         if (!code || !userId) {
-            context.error('Missing code or state in callback');
             return { status: 400, body: 'Missing code or state (userId)' };
         }
 
         try {
-            const tokenData = await uberClient.exchangeCodeForToken(code);
             const db = await DbService.getInstance();
-
-            // Save token linked to user
-            const tokenWithTimestamp = {
-                ...tokenData,
-                acquired_at: Date.now()
-            };
-
-            await db.updateUserToken(userId, 'uber', tokenWithTimestamp);
-            context.log(`Uber token saved successfully for user: ${userId}`);
+            
+            // Exchange code for token
+            const tokenData = await uberClient.exchangeCodeForToken(code);
+            
+            // Save token to user's record
+            const storedToken = { ...tokenData, acquired_at: Date.now() };
+            await db.updateUserToken(userId, 'uber', storedToken);
 
             return {
                 status: 200,
                 headers: { 'Content-Type': 'text/html' },
                 body: `
-                <!DOCTYPE html>
                 <html>
-                <head>
-                    <title>Connected!</title>
-                    <meta name="viewport" content="width=device-width, initial-scale=1">
-                    <style>
-                        body { font-family: system-ui, sans-serif; text-align: center; padding-top: 50px; color: #333; }
-                        .success { font-size: 64px; margin-bottom: 20px; }
-                        p { margin-bottom: 30px; }
-                        .btn { background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; border: none; cursor: pointer; font-size: 16px;}
-                    </style>
-                </head>
-                <body>
-                    <div class="success">✅</div>
-                    <h1>Uber Connected!</h1>
-                    <p>You can now close this window and ask Chicha to find food.</p>
-                    <button onclick="window.close()" class="btn">Close Window</button>
+                <body style="font-family: sans-serif; text-align: center; padding: 40px;">
+                    <h1>✅ Connected!</h1>
+                    <p>Your Uber account has been linked successfully.</p>
+                    <p>You can close this window and return to Chicha.</p>
                     <script>
-                        // Attempt to close automatically
-                        setTimeout(() => {
-                            try { window.close(); } catch(e) {}
-                        }, 2000);
+                        setTimeout(() => window.close(), 3000);
                     </script>
                 </body>
-                </html>`
+                </html>
+                `
             };
-        } catch (err: any) {
-            context.error('Uber Callback Failed', err);
-            return { status: 500, body: `Authentication failed: ${err.message}` };
+        } catch (e: any) {
+            context.error('Uber Token Exchange Error:', e);
+            return { 
+                status: 500, 
+                body: `Failed to connect to Uber. ${e.message}` 
+            };
         }
     }
 });
 
-// 3. Webhook Endpoint: Verifies signature and logs events
-app.http('uber-webhook', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    route: 'uber/webhook',
-    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-        const signature = request.headers.get('x-uber-signature');
-        const bodyText = await request.text();
-
-        const signingKey = process.env.UBER_WEBHOOK_SECRET || process.env.UBER_CLIENT_SECRET;
-
-        if (!signingKey) {
-             context.error('Missing Uber Signing Key');
-             return { status: 500, body: 'Server Configuration Error' };
-        }
-
-        if (!signature) {
-            context.warn('Missing X-Uber-Signature header');
-            return { status: 401, body: 'Missing Signature' };
-        }
-
-        const hmac = crypto.createHmac('sha256', signingKey);
-        const digest = hmac.update(bodyText).digest('hex');
-
-        let isValid = false;
-        if (signature.length === digest.length) {
-             isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
-        }
-
-        if (!isValid) {
-            context.warn(`Invalid Webhook Signature.`);
-            return { status: 401, body: 'Invalid Signature' };
-        }
-
-        const payload = JSON.parse(bodyText);
-        context.log(`Received Uber Webhook [${payload.event_type}]:`, payload);
-
-        return { status: 200, body: 'OK' };
-    }
-});
-
-// 4. Nearby Restaurants Endpoint
+// 3. Nearby Search Endpoint
 app.http('uber-nearby', {
     methods: ['GET'],
     authLevel: 'anonymous',
@@ -185,22 +126,66 @@ app.http('uber-nearby', {
         const lat = parseFloat(request.query.get('lat') || '0');
         const long = parseFloat(request.query.get('long') || '0');
 
-        if (!userId || !lat || !long) {
-            return { status: 400, jsonBody: { error: 'Missing userId, lat, or long' } };
+        if (!userId) {
+            return { status: 400, jsonBody: { error: 'Missing userId' } };
         }
 
         try {
-            // Pass userId directly, allow client to handle token retrieval/refresh/fallback
-            const results = (await uberClient.searchRestaurants(userId, lat, long)) as UberSearchResponse;
-            context.log(`Found ${results.stores?.length ?? 0} restaurants for user ${userId}`);
-            return { status: 200, jsonBody: results };
-        } catch (err: any) {
-            context.error('Uber Nearby Search Failed', err);
-            
-            const isAuthError = err.message.includes('Unauthorized') || err.message.includes('not connected');
-            const status = isAuthError ? 401 : 502;
-            
-            return { status, jsonBody: { error: err.message } };
+            const result = await uberClient.searchRestaurants(userId, lat, long);
+            return { status: 200, jsonBody: result };
+        } catch (e: any) {
+            context.error('Uber Search Error:', e);
+            const message = e.message || 'Unknown error';
+            if (message.includes('User not connected')) {
+                 return { status: 401, jsonBody: { error: message } };
+            }
+            return { status: 500, jsonBody: { error: message } };
         }
+    }
+});
+
+// 4. Status Endpoint: Check if user is connected
+app.http('uber-status', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    route: 'uber/status',
+    handler: async (request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> => {
+        const userId = request.query.get('userId');
+        if (!userId) return { status: 400, jsonBody: { error: 'Missing userId' } };
+
+        const db = await DbService.getInstance();
+        const token = await db.getUserToken(userId, 'uber');
+
+        return {
+            status: 200,
+            jsonBody: { 
+                connected: !!token 
+            }
+        };
+    }
+});
+
+// 5. Webhook Endpoint
+app.http('uber-webhook', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    route: 'uber/webhook',
+    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        const signature = request.headers.get('x-uber-signature');
+        const body = await request.text();
+
+        const clientSecret = process.env.UBER_WEBHOOK_SECRET;
+        if (clientSecret) {
+            const hmac = crypto.createHmac('sha256', clientSecret);
+            const digest = hmac.update(body).digest('hex');
+            if (signature !== digest) {
+                context.warn('Webhook signature mismatch');
+            }
+        }
+
+        const payload = JSON.parse(body);
+        context.log('Uber Webhook Received:', payload);
+
+        return { status: 200 };
     }
 });

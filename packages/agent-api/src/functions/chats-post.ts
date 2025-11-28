@@ -1,3 +1,4 @@
+
 import { Readable } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
@@ -25,12 +26,12 @@ You are **Chicha**, an intelligent and sassy burger ordering assistant. You don'
 
 ## Capabilities & Rules
 1.  **Location First**: If the user asks for "nearby" or "delivery", ALWAYS check if you have their location context. If not, ask them to click the location pin button.
-2.  **Real-World Discovery**: Use \`search_nearby_restaurants\` to find real places.
+2.  **Real-World Discovery**: Use \`search_nearby_restaurants\` to find real places. 
     - If the tool fails with an auth error (or says "User not connected"), tell the user: "I need to connect to your Uber account to see what's good around here." and **provide this exact login link**: [Connect Uber Account](<LOGIN_URL>).
     - Format restaurant results beautifully with Markdown (bold names, star ratings, images).
-3.  **Internal Orders**: Use \`get_burgers\` and \`place_order\` for Contoso Burgers.
+3.  **Internal Orders**: Use \`get_burgers\` and \`place_order\` for Contoso Burgers. 
     - *Note*: Placing orders requires a \`userId\`.
-4.  **Proactivity**:
+4.  **Proactivity**: 
     - If a user selects a burger, suggest a matching topping or ask about allergies.
     - If looking at external restaurants, mention delivery times.
 5.  **Follow-up**: ALWAYS generate 3 quick follow-up questions for the user to keep the flow moving.
@@ -44,49 +45,22 @@ You are **Chicha**, an intelligent and sassy burger ordering assistant. You don'
 
 const titleSystemPrompt = `Create a short, punchy title for this chat session (max 30 chars). No quotes. Example: "Spicy Burger Hunt" or "Late Night Snack".`;
 
-// Helper to dynamically discover sibling services in Azure Flex Consumption
-function resolveServiceUrl(type: 'api' | 'mcp'): string {
-    const envVar = type === 'api' ? 'BURGER_API_URL' : 'BURGER_MCP_URL';
-    const configured = process.env[envVar];
-    if (configured) return configured;
-
-    // Auto-discovery for Azure
-    const siteName = process.env.WEBSITE_SITE_NAME; // e.g., "func-agent-api-xyz123"
-    //const region = process.env.REGION_NAME; // e.g., "uksouth" - varies by runtime
-
-    if (siteName && siteName.includes('agent-api')) {
-        // Infer sibling name: func-agent-api-xyz -> func-burger-api-xyz
-        const targetService = type === 'api' ? 'burger-api' : 'burger-mcp';
-        const siblingName = siteName.replace('agent-api', targetService);
-        const suffix = type === 'mcp' ? '/mcp' : '';
-
-        // Construct standard Azure Functions URL
-        return `https://${siblingName}.azurewebsites.net${suffix}`;
-    }
-
-    // Fallback for local development
-    return type === 'api' ? 'http://localhost:7071' : 'http://localhost:3000/mcp';
-}
-
 export async function postChats(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   context.log('[chats-post] Processing POST request');
-
+  
   const azureOpenAiEndpoint = process.env.AZURE_OPENAI_API_ENDPOINT;
   const openAiApiKey = process.env.OPENAI_API_KEY || process.env.AZURE_OPENAI_API_KEY;
   const openAiBaseUrl = process.env.OPENAI_API_BASE_URL || process.env.AZURE_OPENAI_ENDPOINT;
-
-  // Use smart resolution if env vars are missing
-  const burgerMcpUrl = resolveServiceUrl('mcp');
-  const burgerApiUrl = resolveServiceUrl('api');
-
-  context.log(`[chats-post] Service Discovery - API: ${burgerApiUrl}, MCP: ${burgerMcpUrl}`);
+  
+  const burgerMcpUrl = process.env.BURGER_MCP_URL ?? 'http://localhost:3000/mcp';
+  const burgerApiUrl = process.env.BURGER_API_URL ?? 'http://localhost:7071';
 
   try {
     const requestBody = (await request.json()) as AIChatCompletionRequest;
     const { messages, context: chatContext } = requestBody;
 
     const userId = await getInternalUserId(request, requestBody);
-
+    
     if (!userId) {
       const hasAuthHeader = request.headers.has('x-ms-client-principal');
       if (!hasAuthHeader) {
@@ -116,7 +90,7 @@ export async function postChats(request: HttpRequest, context: InvocationContext
     const userLocation = chatContext?.location;
 
     // Validate AI Config
-    if ((!azureOpenAiEndpoint && !openAiApiKey)) {
+    if ((!azureOpenAiEndpoint && !openAiApiKey) || !burgerMcpUrl) {
       return {
         status: 500,
         jsonBody: {
@@ -138,25 +112,14 @@ export async function postChats(request: HttpRequest, context: InvocationContext
         streaming: true,
       });
     } else {
-      context.log(`[chats-post] Using Azure OpenAI. Endpoint: ${azureOpenAiEndpoint}`);
-
-      const authConfig = openAiApiKey
-        ? { azureOpenAIApiKey: openAiApiKey }
-        : { azureADTokenProvider: getAzureOpenAiTokenProvider() };
-
-      if (openAiApiKey) {
-          context.log('[chats-post] Auth: Using API Key');
-      } else {
-          context.log('[chats-post] Auth: Using Managed Identity');
-      }
-
+      context.log(`[chats-post] Using Azure OpenAI (Managed Identity). Endpoint: ${azureOpenAiEndpoint}`);
       context.log(`[chats-post] Configuration - Deployment: ${modelName}, API Version: ${apiVersion}`);
-
+      
       model = new AzureChatOpenAI({
         azureOpenAIEndpoint: azureOpenAiEndpoint,
         azureOpenAIApiDeploymentName: modelName,
         azureOpenAIApiVersion: apiVersion,
-        ...authConfig,
+        azureADTokenProvider: getAzureOpenAiTokenProvider(),
         streaming: true,
       });
     }
@@ -173,30 +136,15 @@ export async function postChats(request: HttpRequest, context: InvocationContext
       name: 'burger-mcp-client',
       version: '1.0.0',
     });
-
     context.log(`[chats-post] Connecting to MCP: ${burgerMcpUrl}`);
-
-    // Retry logic for MCP connection
-    let connected = false;
-    let attempts = 0;
-    while(!connected && attempts < 3) {
-        try {
-            const transport = new StreamableHTTPClientTransport(new URL(burgerMcpUrl));
-            await client.connect(transport);
-            connected = true;
-        } catch (e) {
-            attempts++;
-            context.warn(`[chats-post] Failed to connect to MCP (Attempt ${attempts}):`, e);
-            if (attempts === 3) throw e;
-            await new Promise(r => setTimeout(r, 500));
-        }
-    }
+    const transport = new StreamableHTTPClientTransport(new URL(burgerMcpUrl));
+    await client.connect(transport);
 
     const tools = await loadMcpTools('burger', client);
-
+    
     const loginUrl = `${burgerApiUrl}/api/uber/login?userId=${userId}`;
     let currentSystemPrompt = agentSystemPrompt.replace('<LOGIN_URL>', loginUrl);
-
+    
     if (userLocation) {
         currentSystemPrompt += `\n\n[SYSTEM NOTE]: User is currently located at Latitude: ${userLocation.lat}, Longitude: ${userLocation.long}. Use these coordinates.`;
     }
@@ -232,6 +180,9 @@ export async function postChats(request: HttpRequest, context: InvocationContext
           }
       } catch (e: any) {
           context.warn('Failed to generate session title (non-fatal):', e.message);
+          if (e.message?.includes('404')) {
+             context.warn('HINT: This 404 usually means the Deployment Name in Azure OpenAI does not match the environment variable AZURE_OPENAI_MODEL.');
+          }
       }
     };
 
@@ -361,6 +312,7 @@ async function* createJsonStream(
     }
   } catch (e: any) {
       context.error('Error during stream generation:', e);
+      // Send an error chunk to the client so it knows to stop spinning
       const errorChunk = {
           delta: {
               content: `\n\n**Error:** ${e.message || 'An error occurred while communicating with the AI service.'}\n\n*Admin Note: Check if the Azure OpenAI Deployment Name matches the configuration.*`,

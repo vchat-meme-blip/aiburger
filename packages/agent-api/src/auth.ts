@@ -35,8 +35,8 @@ export function getAuthenticationUserId(request: HttpRequest): string | undefine
 
 export async function getInternalUserId(request: HttpRequest, body?: any): Promise<string | undefined> {
   // 1. Priority: Explicit Query Param (Used by Client)
-  // Fix: Allow null (returned by get) or undefined
-  let queryId: string | null | undefined = request.query.get('userId');
+  const queryVal = request.query.get('userId');
+  let queryId: string | undefined = queryVal || undefined;
 
   // Debug logging for diagnosis
   if (!queryId) {
@@ -44,8 +44,11 @@ export async function getInternalUserId(request: HttpRequest, body?: any): Promi
       if (request.url && request.url.includes('userId=')) {
           try {
               const urlObj = new URL(request.url);
-              queryId = urlObj.searchParams.get('userId');
-              if (queryId) console.log(`[Auth] Recovered userId from URL string: ${queryId}`);
+              const manualId = urlObj.searchParams.get('userId');
+              if (manualId) {
+                  queryId = manualId;
+                  console.log(`[Auth] Recovered userId from URL string: ${queryId}`);
+              }
           } catch {}
       }
   }

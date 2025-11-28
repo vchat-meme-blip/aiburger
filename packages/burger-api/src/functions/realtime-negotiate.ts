@@ -1,4 +1,3 @@
-
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { PubSubService } from '../pubsub-service.js';
 

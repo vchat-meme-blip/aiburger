@@ -10,11 +10,10 @@ console.log(`Using burger API base URL: "${burgerApiUrl}"`);
 export default defineConfig({
   base: '/',
   define: {
-    // CRITICAL: Always set VITE_API_URL to empty string for the build.
-    // This ensures the frontend uses relative paths (e.g. /api/chats),
-    // allowing the Static Web App proxy to inject authentication headers.
-    'import.meta.env.VITE_API_URL': JSON.stringify(''),
+    // CRITICAL: Inject the variable so import.meta.env.VITE_BURGER_API_URL is populated in the built bundle
     'import.meta.env.VITE_BURGER_API_URL': JSON.stringify(burgerApiUrl),
+    // Also inject VITE_API_URL to empty string to use relative paths for SWA
+    'import.meta.env.VITE_API_URL': JSON.stringify(''),
   },
   build: {
     outDir: 'dist',

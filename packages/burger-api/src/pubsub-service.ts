@@ -1,3 +1,4 @@
+
 import { WebPubSubServiceClient } from '@azure/web-pubsub';
 import process from 'node:process';
 
@@ -17,20 +18,29 @@ export class PubSubService {
     return PubSubService.instance;
   }
 
+  public get isConnected(): boolean {
+    return this.isInitialized;
+  }
+
   private initialize() {
     const connectionString = process.env.AZURE_WEBPUBSUB_CONNECTION_STRING;
     if (!connectionString) {
-      console.warn('AZURE_WEBPUBSUB_CONNECTION_STRING not found. Real-time features disabled.');
+      console.warn('[PubSub] AZURE_WEBPUBSUB_CONNECTION_STRING not found. Real-time features disabled.');
       return;
+    }
+
+    if (connectionString.length < 20) {
+        console.error('[PubSub] Connection string appears invalid or truncated.');
+        return;
     }
 
     try {
       this.client = new WebPubSubServiceClient(connectionString, this.hubName);
       this.isInitialized = true;
-      console.log('Web PubSub Service initialized.');
+      console.log('[PubSub] Service successfully initialized.');
     } catch (error) {
-      console.error('Failed to initialize Web PubSub client:', error);
-      // Don't crash, just don't set isInitialized
+      console.error('[PubSub] Failed to initialize client:', error);
+      // Do not throw here, allow the app to start without PubSub
     }
   }
 
@@ -42,7 +52,7 @@ export class PubSubService {
     try {
         return await this.client.getClientAccessToken({ userId, expirationTimeInMinutes: 60 });
     } catch (error: any) {
-        console.error('Failed to generate access token:', error);
+        console.error('[PubSub] Failed to generate access token:', error);
         throw error;
     }
   }
@@ -57,13 +67,13 @@ export class PubSubService {
         event: eventName,
         data: data
       });
-      console.log(`Broadcasted ${eventName} to user ${userId}`);
+      console.log(`[PubSub] Broadcasted ${eventName} to user ${userId}`);
     } catch (error: any) {
       // Handle quota exceeded or throttling gracefully
       if (error.statusCode === 429 || error.statusCode === 439) {
-          console.warn(`Web PubSub Quota Exceeded or Throttled. Dropping message for user ${userId}.`);
+          console.warn(`[PubSub] Quota Exceeded or Throttled. Dropping message for user ${userId}.`);
       } else {
-          console.error(`Failed to broadcast to user ${userId}:`, error);
+          console.error(`[PubSub] Failed to broadcast to user ${userId}:`, error);
       }
     }
   }
@@ -80,9 +90,9 @@ export class PubSubService {
         });
     } catch (error: any) {
         if (error.statusCode === 429 || error.statusCode === 439) {
-            console.warn(`Web PubSub Quota Exceeded. Dropping broadcast message.`);
+            console.warn(`[PubSub] Quota Exceeded. Dropping broadcast message.`);
         } else {
-            console.error('Failed to broadcast to all:', error);
+            console.error('[PubSub] Failed to broadcast to all:', error);
         }
     }
   }

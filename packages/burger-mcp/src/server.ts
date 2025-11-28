@@ -7,11 +7,24 @@ import express, { Request, Response } from 'express';
 import { burgerApiUrl } from './config.js';
 import { getMcpServer } from './mcp.js';
 
+// Immediate log for Azure Log Stream visibility
+console.log('--- Burger MCP Server Module Loaded ---');
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+console.log(`Node Version: ${process.version}`);
+console.log(`Burger API Target: ${burgerApiUrl}`);
+
 const app = express();
 app.use(express.json() as any);
 
 app.get('/', (_request: Request, response: Response) => {
-  (response as any).send({ status: 'up', message: `Burger MCP server running (Using burger API URL: ${burgerApiUrl})` });
+  (response as any).send({ 
+    status: 'up', 
+    message: 'Burger MCP server running',
+    config: {
+      burgerApiUrl: burgerApiUrl,
+      nodeVersion: process.version
+    }
+  });
 });
 
 // Store transports by session ID
@@ -145,7 +158,9 @@ app.post('/messages', async (request: Request, response: Response) => {
 // Start the server
 const PORT = process.env.FUNCTIONS_CUSTOMHANDLER_PORT || process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Burger MCP server listening on port ${PORT} (Using burger API URL: ${burgerApiUrl})`);
+  console.log(`Burger MCP server listening on port ${PORT}`);
+  console.log(`- Configured Burger API URL: ${burgerApiUrl}`);
+  console.log(`- Node Version: ${process.version}`);
 });
 
 // Handle server shutdown

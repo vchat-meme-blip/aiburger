@@ -5,13 +5,16 @@
       "routePrefix": ""
     }
   },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
+  },
   "customHandler": {
     "description": {
       "defaultExecutablePath": "node",
       "workingDirectory": "",
-      "arguments": ["lib/server.js"]
+      "arguments": ["dist/server.js"]
     },
-    "enableForwardingHttpRequest": true,
-    "enableHttpProxyingRequest": true
+    "enableForwardingHttpRequest": true
   }
 }

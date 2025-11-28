@@ -44,56 +44,52 @@ export class UberClient {
   private useMock: boolean;
 
   constructor() {
-    this.clientId = process.env.UBER_CLIENT_ID || '';
+    // --- UBER SANDBOX CONFIGURATION ---
+    // Fallbacks strictly match the "Master Deployment & Configuration Guide"
+    
+    this.clientId = process.env.UBER_CLIENT_ID || 'TrNolyK4ausCZ9dur-1qjq7zDGRTfoPr';
     this.clientSecret = process.env.UBER_CLIENT_SECRET || '';
-    this.redirectUri = process.env.UBER_REDIRECT_URI || '';
-
-    // --- STRICT DASHBOX CONFIGURATION ---
-    // Aligned exactly with the "Integration Steps" from your dashboard.
-
-    // Step 2 URL:
-    this.authUrl = 'https://sandbox-login.uber.com/oauth/v2/authorize';
-
-    // Step 4 URL:
-    this.tokenUrl = 'https://sandbox-login.uber.com/oauth/v2/token';
-
-    // Step 5 URL (Base):
+    
+    // Auto-detect the deployed function URL if not set explicitly
+    // This helps avoiding "redirect_uri_mismatch" errors
+    this.redirectUri = process.env.UBER_REDIRECT_URI || 
+       (process.env.BURGER_API_URL 
+           ? `${process.env.BURGER_API_URL}/api/uber/callback` 
+           : 'https://func-burger-api-lf6kch3t2wm3e.azurewebsites.net/api/uber/callback');
+    
+    // Explicitly using Sandbox URLs for testing
+    this.authUrl = process.env.UBER_AUTH_URL || 'https://sandbox-login.uber.com/oauth/v2/authorize';
+    this.tokenUrl = process.env.UBER_TOKEN_URL || 'https://sandbox-login.uber.com/oauth/v2/token';
     this.apiUrl = 'https://test-api.uber.com/v1';
-
-    // Allow override for production via Env Var later
-    if (process.env.UBER_ENV === 'production') {
-        this.authUrl = 'https://login.uber.com/oauth/v2/authorize';
-        this.tokenUrl = 'https://login.uber.com/oauth/v2/token';
-        this.apiUrl = 'https://api.uber.com/v1';
-    }
-
-    this.useMock = !this.clientId || !this.clientSecret;
-
+    
+    // Only mock if we really don't have secrets
+    this.useMock = !this.clientSecret;
+    
     if (this.useMock) {
-        console.log('⚠️ Uber Credentials missing. Initializing UberClient in SIMULATION MODE.');
+        console.log('⚠️ Uber Credentials (Secret) missing. Initializing UberClient in SIMULATION MODE.');
     } else {
         console.log(`[UberClient] Initialized in SANDBOX mode.`);
+        console.log(`- Client ID: ${this.clientId ? '***' + this.clientId.slice(-4) : 'Missing'}`);
         console.log(`- Auth URL: ${this.authUrl}`);
-        console.log(`- Token URL: ${this.tokenUrl}`);
+        console.log(`- Redirect URI: ${this.redirectUri}`);
     }
   }
 
   getLoginUrl(state: string): string {
     if (this.useMock) {
-        const appUrl = process.env.AGENT_WEBAPP_URL || 'http://localhost:4280';
+        const appUrl = process.env.AGENT_WEBAPP_URL || 'https://proud-ground-06bff150f.3.azurestaticapps.net';
         return `${appUrl}/.auth/login/done?mock=true`;
     }
-
-    // In Sandbox mode, these scopes are auto-granted.
-    // We request them explicitly to match the dashboard flow.
-    const scopes = ['eats.store.search', 'eats.order', 'profile'];
-
+    
+    // Request Marketplace scopes
+    const scopes = ['eats.store.search', 'eats.order', 'profile']; 
+    
     const params = new URLSearchParams({
       client_id: this.clientId,
       response_type: 'code',
       redirect_uri: this.redirectUri,
-      scope: scopes.join(' '),
-      state: state,
+      scope: scopes.join(' '), 
+      state: state, 
     });
     return `${this.authUrl}?${params.toString()}`;
   }
@@ -129,6 +125,7 @@ export class UberClient {
   }
 
   private async fetchToken(params: URLSearchParams): Promise<UberTokenResponse> {
+    console.log(`[UberClient] Fetching token from ${this.tokenUrl}`);
     const response = await fetch(this.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -157,7 +154,7 @@ export class UberClient {
         return this.getMockRestaurants();
     }
 
-    const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`;
+    const url = `${this.apiUrl}/eats/stores/search?lat=${lat}&lng=${long}&radius=5`; 
 
     const callApi = async (token: string) => {
         return fetch(url, {
@@ -185,8 +182,6 @@ export class UberClient {
     if (!response.ok) {
        const errorText = await response.text();
        console.warn(`[UberClient] API failed (${url}). Status: ${response.status}`, errorText);
-
-       // Fallback to mock if sandbox is empty or errors
        return this.getMockRestaurants();
     }
 
@@ -212,7 +207,7 @@ export class UberClient {
                   rating: 4.8,
                   eta: "15-25",
                   delivery_fee: "$1.99",
-                  image_url: "https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?auto=format&fit=crop&w=500&q=60",
+                  image_url: "https://d1ralsognjng37.cloudfront.net/e709d74b-d191-4197-a39d-b47c0936230e.jpeg",
                   url: "https://www.ubereats.com",
                   menu: [
                       { id: "ss-1", name: "ShackBurger", description: "Cheeseburger with lettuce, tomato, ShackSauce.", price: 8.99, tags: ["burger"] }
@@ -224,7 +219,7 @@ export class UberClient {
                   rating: 4.6,
                   eta: "20-35",
                   delivery_fee: "$0.49",
-                  image_url: "https://images.unsplash.com/photo-1551782450-a2132b4ba21d?auto=format&fit=crop&w=500&q=60",
+                  image_url: "https://d1ralsognjng37.cloudfront.net/9369547e-e4f5-469e-b99b-3607d3d3a702.jpeg",
                   url: "https://www.ubereats.com",
                   promo: "BOGO Fries"
               }

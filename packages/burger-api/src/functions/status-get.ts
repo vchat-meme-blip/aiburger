@@ -1,11 +1,15 @@
+
+import process from 'node:process';
 import { app, type HttpRequest, type InvocationContext } from '@azure/functions';
 import { DbService } from '../db-service.js';
+import { PubSubService } from '../pubsub-service.js';
+import { BlobService } from '../blob-service.js';
 import { OrderStatus } from '../order.js';
 
 app.http('status-get', {
   methods: ['GET'],
   authLevel: 'anonymous',
-  route: '{ignored:maxlength(0)?}', // Empty route, just using an empty string isn't working
+  route: '{ignored:maxlength(0)?}', // Empty route for the API root
   async handler(_request: HttpRequest, context: InvocationContext) {
     context.log('Processing request to get server status...');
 
@@ -19,6 +23,17 @@ app.http('status-get', {
         (order) => order.status !== OrderStatus.Completed && order.status !== OrderStatus.Cancelled,
       );
 
+      // Check Configurations
+      const pubSub = PubSubService.getInstance();
+      const blob = await BlobService.getInstance();
+      
+      const uberClientSecret = process.env.UBER_CLIENT_SECRET;
+      const uberConfig = {
+          clientId: !!process.env.UBER_CLIENT_ID,
+          clientSecret: !!uberClientSecret && uberClientSecret.length > 0,
+          mode: (uberClientSecret && uberClientSecret.length > 0) ? 'sandbox' : 'mock'
+      };
+
       return {
         jsonBody: {
           status: 'up',
@@ -26,6 +41,11 @@ app.http('status-get', {
           totalOrders: orders.length,
           registeredUsers,
           timestamp: new Date().toISOString(),
+          config: {
+              pubSub: pubSub.isConnected ? 'connected' : 'disconnected',
+              blobStorage: blob.isConnected ? 'connected' : 'local-fallback',
+              uber: uberConfig
+          }
         },
         status: 200,
       };

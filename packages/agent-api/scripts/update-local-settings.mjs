@@ -31,6 +31,9 @@ const settings = {
   OPENAI_MODEL: process.env.OPENAI_MODEL,
   // Cosmos
   AZURE_COSMOSDB_NOSQL_ENDPOINT: process.env.AZURE_COSMOSDB_NOSQL_ENDPOINT,
+  // Service Links
+  BURGER_API_URL: process.env.BURGER_API_URL || 'http://localhost:7071',
+  BURGER_MCP_URL: process.env.BURGER_MCP_URL || 'http://localhost:3000/mcp'
 };
 
 const settingsFilePath = path.join(__dirname, '../local.settings.json');

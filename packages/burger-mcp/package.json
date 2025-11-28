@@ -1,19 +1,21 @@
 {
   "name": "burger-mcp",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Model Context Protocol (MCP) server for Contoso Burgers API",
   "private": true,
   "type": "module",
-  "exports": "./lib/local.js",
+  "main": "./dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "start": "tsx src/server.ts",
+    "start": "node dist/server.js",
     "start:local": "tsx src/local.ts",
     "dev": "tsx watch src/server.ts",
     "dev:local": "tsx watch src/local.ts",
     "build": "tsc",
-    "clean": "rimraf lib",
-    "update:local-settings": "node ./scripts/update-local-settings.mjs",
-    "postinstall": "npm run update:local-settings"
+    "clean": "rimraf dist",
+    "update:local-settings": "node ./scripts/update-local-settings.mjs"
   },
   "keywords": [],
   "author": "Microsoft",
@@ -22,12 +24,13 @@
     "@modelcontextprotocol/sdk": "^1.10.2",
     "dotenv": "^17.0.1",
     "express": "^5.0.1",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "rimraf": "^6.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@types/express": "^5.0.0",
-    "@types/node": "^22",
-    "tsx": "^4",
+    "tsx": "^4.0.0",
     "typescript": "^5.8.3"
   }
 }

@@ -23,6 +23,10 @@ export class BlobService {
     return BlobService.instance;
   }
 
+  public get isConnected(): boolean {
+    return this.isInitialized && !this.useLocalFallback;
+  }
+
   protected async initialize(): Promise<void> {
     try {
       const storageUrl = process.env.AZURE_STORAGE_URL;
