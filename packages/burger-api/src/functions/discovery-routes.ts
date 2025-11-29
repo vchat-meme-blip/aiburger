@@ -10,7 +10,7 @@ const uberClient = new UberClient();
 function scoreItem(item: any, queryTerms: string[]): number {
     let score = 0;
     const text = `${item.name} ${item.description} ${item.tags?.join(' ')} ${item.category}`.toLowerCase();
-    
+
     for (const term of queryTerms) {
         if (text.includes(term)) {
             score += 1;
@@ -47,12 +47,12 @@ app.http('discovery-search', {
         // 1. Search Internal Menu (Contoso Burgers)
         const db = await DbService.getInstance();
         const burgers = await db.getBurgers();
-        
+
         for (const burger of burgers) {
             // Enhance burger object with tags for scoring
             const burgerWithTags = { ...burger, tags: ['burger', 'internal', 'contoso'] };
             const score = scoreItem(burgerWithTags, queryTerms);
-            
+
             if (score > 0) {
                 results.push({
                     type: 'internal',
@@ -71,9 +71,9 @@ app.http('discovery-search', {
         // 2. Search External (Uber Eats)
         if (userId) {
             try {
-                // Pass userId directly, let client handle token retrieval/refresh
-                const uberData = (await uberClient.searchRestaurants(userId, lat, long)) as UberSearchResponse;
-                
+                // Get Uber Eats restaurants near the specified location
+                const uberData = (await uberClient.searchRestaurants(lat, long)) as UberSearchResponse;
+
                 if (uberData && uberData.stores) {
                     for (const store of uberData.stores) {
                         if (store.menu) {

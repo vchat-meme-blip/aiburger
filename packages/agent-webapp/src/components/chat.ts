@@ -52,16 +52,18 @@ export const chatDefaultOptions: ChatComponentOptions = {
   enableDebug: true,
   minStepDisplayMs: 1000,
   promptSuggestions: [
-    'What promos are available today?',
-    'Order a double cheeseburger for delivery',
-    'Track my order status',
+    'Find burger restaurants near me',
+    'Show me today\'s best deals',
+    'Order a cheeseburger for delivery',
+    'Track my current order status',
+    'What are your special offers?'
   ],
   messages: [],
   strings: {
-    promptSuggestionsTitle: 'Ask Chicha about burgers & deals',
-    citationsTitle: 'Citations:',
-    followUpQuestionsTitle: 'Suggested follow-up:',
-    chatInputPlaceholder: 'Type your order or question...',
+    promptSuggestionsTitle: 'What would you like to do?',
+    citationsTitle: 'Sources:',
+    followUpQuestionsTitle: 'Next steps:',
+    chatInputPlaceholder: 'Ask about burgers, deals, or place an order...',
     chatInputButtonLabel: 'Send question',
     assistant: 'Chicha AI',
     user: 'You',
@@ -69,16 +71,16 @@ export const chatDefaultOptions: ChatComponentOptions = {
     newChatButton: 'New chat',
     retryButton: 'Retry',
     tools: {
-      get_burgers: 'Scanning menu...',
-      get_burger_by_id: 'Checking burger details...',
-      get_toppings: 'Looking for toppings...',
+      get_burgers: 'Finding the best burgers for you...',
+      get_burger_by_id: 'Getting burger details...',
+      get_toppings: 'Loading available toppings...',
       get_topping_by_id: 'Checking topping details...',
-      get_topping_categories: 'Checking categories...',
-      get_orders: 'Tracking orders...',
-      get_order_by_id: 'Locating order...',
-      place_order: 'Placing your delicious order...',
-      delete_order_by_id: 'Cancelling order...',
-      search_nearby_restaurants: 'Checking Uber Eats for nearby spots...',
+      get_topping_categories: 'Finding topping categories...',
+      get_orders: 'Checking your orders...',
+      get_order_by_id: 'Finding your order...',
+      place_order: 'Placing your order...',
+      delete_order_by_id: 'Cancelling your order...',
+      search_nearby_restaurants: 'Finding nearby restaurants...',
     },
   },
 };
@@ -117,11 +119,11 @@ export class ChatComponent extends LitElement {
       if (changedProperties.has('userId') && this.userId) {
           const realtime = RealtimeService.getInstance();
           await realtime.connect(this.userId);
-          
+
           realtime.on('order-created', (order: any) => {
               this.showToast(`🎉 Order #${order.id.slice(-6)} Confirmed!`);
           });
-          
+
           realtime.on('order-update', (order: any) => {
               const status = order.status.replace('-', ' ').toUpperCase();
               this.showToast(`🚚 Order #${order.id.slice(-6)} update: ${status}`);
@@ -228,7 +230,7 @@ export class ChatComponent extends LitElement {
         context: {
           userId: this.userId,
           sessionId: this.sessionId,
-          location: this.userLocation, 
+          location: this.userLocation,
         },
       });
       const { messages } = this;
@@ -366,24 +368,24 @@ export class ChatComponent extends LitElement {
             <span>Chicha AI</span>
         </div>
         <div class="header-actions">
-            <button 
-                class="header-btn" 
-                title="Dashboard" 
+            <button
+                class="header-btn"
+                title="Dashboard"
                 @click=${this.onDashboardClicked}
             >
                 ${unsafeSVG(dashboardSvg)}
                 <span class="btn-label">Dashboard</span>
             </button>
-            <button 
-                class="header-btn" 
+            <button
+                class="header-btn"
                 title="Chat History"
                 @click=${this.onHistoryClicked}
             >
                 ${unsafeSVG(historySvg)}
                 <span class="btn-label">History</span>
             </button>
-            <button 
-                class="header-btn primary" 
+            <button
+                class="header-btn primary"
                 title="New Chat"
                 @click=${() => this.onNewChatClicked()}
                 ?disabled=${this.isLoading}
@@ -498,20 +500,20 @@ export class ChatComponent extends LitElement {
     return html`
       <section class="chat-container">
         ${this.renderHeader()}
-        
+
         ${this.options.enablePromptSuggestions &&
         this.options.promptSuggestions.length > 0 &&
         this.messages.length === 0
           ? this.renderSuggestions(this.options.promptSuggestions)
           : nothing}
-          
+
         <div class="messages">
           ${repeat(parsedMessages, (_, index) => index, this.renderMessage)} ${this.renderLoader()}
           ${this.hasError ? this.renderError() : nothing}
           ${this.renderFollowupQuestions(parsedMessages[parsedMessages.length - 1]?.followupQuestions ?? [])}
         </div>
         ${this.renderChatInput()}
-        
+
         <div class="toast-notification ${this.toastMessage ? 'show' : ''}">
             ${this.toastMessage}
         </div>
@@ -593,7 +595,7 @@ export class ChatComponent extends LitElement {
         cursor: pointer;
       }
     }
-    
+
     /* --- Header --- */
     .chat-header {
         display: flex;
@@ -607,7 +609,7 @@ export class ChatComponent extends LitElement {
         top: 0;
         z-index: 10;
     }
-    
+
     .header-title {
         font-family: 'Sofia Sans Condensed', sans-serif;
         font-weight: 700;
@@ -618,12 +620,12 @@ export class ChatComponent extends LitElement {
         color: #333;
     }
     .brand-icon { font-size: 1.4rem; }
-    
+
     .header-actions {
         display: flex;
         gap: 8px;
     }
-    
+
     .header-btn {
         background: transparent;
         border: 1px solid transparent;
@@ -641,7 +643,7 @@ export class ChatComponent extends LitElement {
         color: #333;
     }
     .header-btn svg { width: 18px; height: 18px; }
-    
+
     .header-btn.primary {
         background: var(--azc-new-chat-button-bg);
         color: white;
@@ -651,12 +653,12 @@ export class ChatComponent extends LitElement {
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(255, 87, 34, 0.3);
     }
-    
+
     @media (max-width: 600px) {
         .btn-label { display: none; }
         .chat-header { padding: 0.8rem 1rem; }
     }
-    
+
     .chat-container {
       height: 100%;
       overflow: hidden; /* Scroll is inside messages */
@@ -673,7 +675,7 @@ export class ChatComponent extends LitElement {
       display: flex;
       flex-direction: column;
     }
-    
+
     .suggestions-container {
       text-align: center;
       padding: var(--space-xl);
@@ -1063,7 +1065,7 @@ export class ChatComponent extends LitElement {
         right: 0;
       }
     }
-    
+
     /* --- Toast Notifications --- */
     .toast-notification {
       position: fixed;
@@ -1090,7 +1092,7 @@ export class ChatComponent extends LitElement {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-    
+
     @media (prefers-reduced-motion: reduce) {
       .animation {
         animation: none;

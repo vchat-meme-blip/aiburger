@@ -6,7 +6,6 @@ export class RealtimeService {
   private client: WebPubSubClient | undefined;
   private listeners: Map<string, Function[]> = new Map();
   private isConnected = false;
-  private connectionAttempted = false;
 
   private constructor() {}
 
@@ -18,32 +17,25 @@ export class RealtimeService {
   }
 
   public async connect(userId: string) {
-    if (this.isConnected || this.connectionAttempted) return;
-    this.connectionAttempted = true;
+    if (this.isConnected) return;
 
     try {
       const burgerApiUrl = import.meta.env.VITE_BURGER_API_URL || 'http://localhost:7071';
       
       this.client = new WebPubSubClient({
         getClientAccessUrl: async () => {
-          try {
-            const res = await fetch(`${burgerApiUrl}/api/realtime/negotiate?userId=${userId}`);
-            if (!res.ok) {
-               // Gracefully fail if service is unavailable (503) or error (500)
-               // This happens if the resource isn't provisioned yet
-               if (res.status === 503) {
-                   console.warn('[Realtime] Service unavailable (503). Real-time updates disabled.');
-                   return { url: '' }; // Abort
-               }
-               throw new Error(`Failed to negotiate: ${res.statusText}`);
-            }
-            const data = await res.json();
-            if (!data.url) throw new Error('No URL returned from negotiate');
-            return data.url;
-          } catch (e) {
-            console.warn('[Realtime] Negotiation failed:', e);
-            return { url: '' };
+          const res = await fetch(`${burgerApiUrl}/api/realtime/negotiate?userId=${userId}`);
+          if (!res.ok) {
+             // Gracefully fail if service is unavailable (503) or error (500)
+             if (res.status === 503) {
+                 console.warn('Real-time features disabled (Server returned 503)');
+                 return ''; // Abort connection attempt
+             }
+             throw new Error(`Failed to negotiate realtime connection: ${res.statusText}`);
           }
+          const data = await res.json();
+          if (!data.url) throw new Error('No URL returned from negotiate');
+          return data.url;
         }
       });
 
@@ -57,10 +49,10 @@ export class RealtimeService {
 
       await this.client.start();
       this.isConnected = true;
-      console.log('[Realtime] Connection established');
+      console.log('Real-time connection established');
     } catch (err) {
-      // Swallow the error to prevent crashing the UI
-      console.warn('[Realtime] Failed to connect, falling back to polling/static updates.', err);
+      // Swallow the error to prevent crashing the UI, but log a warning
+      console.warn('Real-time service unavailable, falling back to polling/static updates.', err);
       this.isConnected = false;
     }
   }

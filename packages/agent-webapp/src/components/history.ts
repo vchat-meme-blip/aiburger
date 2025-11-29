@@ -1,4 +1,3 @@
-
 import { LitElement, css, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
@@ -49,10 +48,10 @@ export class HistoryComponent extends LitElement {
   @state() protected hasError = false;
   @state() protected isLoading = false;
 
-  connectedCallback() {
+  override connectedCallback() {
       super.connectedCallback();
       window.addEventListener('azc-toggle-history', () => this.toggle());
-      
+
       // Close on Escape key
       document.addEventListener('keydown', (e) => {
           if(e.key === 'Escape' && this.open) this.open = false;
@@ -72,14 +71,14 @@ export class HistoryComponent extends LitElement {
       this.isLoading = true;
       const response = await fetch(`${this.getApiUrl()}/api/chats/${sessionId}/?userId=${this.userId}`);
       if (!response.ok) throw new Error(`Failed to load chat: ${response.statusText}`);
-      
+
       const messages = await response.json();
       const loadSessionEvent = new CustomEvent('loadSession', {
         detail: { id: sessionId, messages },
         bubbles: true,
       });
       (this as unknown as HTMLElement).dispatchEvent(loadSessionEvent);
-      
+
       // Close drawer on selection
       this.open = false;
     } catch (error) {
@@ -121,7 +120,7 @@ export class HistoryComponent extends LitElement {
           }
           throw new Error(`API Error: ${response.status}`);
       }
-      
+
       const chats = await response.json();
       if (!Array.isArray(chats)) {
           this.chats = [];
@@ -173,9 +172,9 @@ export class HistoryComponent extends LitElement {
                 <button class="close-btn" @click=${() => this.open = false}>×</button>
             </div>
             <div class="drawer-content">
-                ${this.renderLoader()} 
+                ${this.renderLoader()}
                 ${repeat(this.chats, (entry) => entry.id, (entry) => this.renderChatEntry(entry))}
-                ${this.renderNoChatHistory()} 
+                ${this.renderNoChatHistory()}
                 ${this.renderError()}
             </div>
         </div>
@@ -345,7 +344,7 @@ export class HistoryComponent extends LitElement {
         animation: spin 1s linear infinite;
         margin: 2rem auto;
     }
-    
+
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   `;
 }

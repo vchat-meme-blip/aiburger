@@ -20,7 +20,7 @@ try {
     if (existsSync(envPath)) {
         dotenv.config({ path: envPath, quiet: true });
     } else {
-        // This is normal during cloud build
+        // This is normal during cloud build where .env isn't checked in
         console.log('No .env file found at root (skipping env load for local settings)');
     }
 } catch (e) {
@@ -46,6 +46,5 @@ try {
     );
     console.log('local.settings.json file updated successfully.');
 } catch (err) {
-    // In some CI/CD or restricted environments, writing might fail or not be necessary
     console.warn('Notice: Could not write local.settings.json. This is non-fatal for cloud deployment.', err.message);
 }
