@@ -11,7 +11,7 @@
 
 **Chicha** is a production-ready AI Agent capable of bridging the gap between natural language and real-world food delivery logistics. Unlike simple chatbots, Chicha connects directly to delivery platforms (like Uber Eats) to manage the full lifecycle of a meal.
 
-[Overview](#overview) • [Architecture](#architecture) • [Roadmap](#roadmap) • [Getting started](#getting-started) • [Deploy to Azure](#deploy-to-azure)
+[Overview](#overview) • [Architecture](#architecture) • [Getting Started](#getting-started) • [Deployment](#deployment) • [Contributing](#contributing)
 
 </div>
 
@@ -20,56 +20,179 @@
 This project demonstrates a serverless AI agent architecture using **LangChain.js** and the **Model Context Protocol (MCP)**. It is designed to move beyond simple text generation into "Agentic AI"—software that takes action.
 
 ### Core Capabilities (Live & Planned)
-- **🧠 Context-Aware AI**: Remembers your dietary preferences and location.
-- **🔌 Real Integrations**: Connects to Uber Eats Sandbox for live restaurant discovery.
-- **📍 Geo-Location**: Uses browser geolocation for precise delivery targeting.
-- **🛍️ Unified Ordering**: Abstracted ordering interface (simulated internal + external providers).
+- **🧠 Context-Aware AI**: Remembers your dietary preferences, location, and order history
+- **🔌 Real Integrations**: Seamless connection to Uber Eats API for live restaurant discovery and ordering
+- **📍 Geo-Location**: Smart location-based restaurant discovery with fallback options
+- **🛍️ Unified Ordering**: Consistent interface across multiple delivery platforms
+- **🔐 Secure Authentication**: OAuth 2.0 with secure token management
+- **📊 Real-time Updates**: Live order tracking and status notifications
 
 ## Architecture
 
-The system is composed of loosely coupled microservices:
+### High-Level Architecture
 
-| Service | Role | Tech |
-| ------- | ---- | ---- |
-| **Agent Web App** | The "Face". React/Lit UI that handles chat, geolocation, and auth. | Azure Static Web Apps |
-| **Agent API** | The "Brain". LangChain.js orchestrator that decides *what* to do. | Azure Functions (Node.js) |
-| **Burger MCP** | The "Hands". Standardized tool interface for the AI to touch APIs. | Azure Functions (MCP) |
-| **Burger API** | The "Core". Business logic, database, and Uber Eats gateway. | Azure Functions + Cosmos DB |
+```mermaid
+graph TD
+    subgraph "Client Layer"
+        A[Web App] -->|API Calls| B[Agent API]
+        C[Mobile App] -->|API Calls| B
+        D[Chat Interface] -->|Streaming| B
+    end
 
-## Roadmap: Building the Full "Chicha" Experience
+    subgraph "AI Layer"
+        B -->|Process Request| E[LangChain Agent]
+        E -->|Tool Calls| F[MCP Tools]
+        F -->|Uber Eats| G[External APIs]
+        F -->|Payments| H[Crypto Payment Gateway]
+        E -->|Data Storage| I[Cosmos DB]
+    end
 
-We are actively moving from a demo to a full delivery assistant. See the [Chicha Technical Roadmap](./docs/CHICHA_ROADMAP.md) for the detailed engineering plan covering:
+    subgraph "Infrastructure"
+        J[Azure Functions]
+        K[Static Web Apps]
+        L[Application Insights]
+    end
+```
 
-1.  **Live Courier Tracking** (Webhooks + Real-time Sockets)
-2.  **Smart Scheduling** (Time-delayed execution)
-3.  **Promo Hunter** (Vector-based deal discovery)
-4.  **Cross-Platform Payment** (Crypto/Fiat bridging)
+### Component Details
 
-## Getting started
+| Service | Role | Tech | Key Features |
+| ------- | ---- | ---- | ------------ |
+| **Agent Web App** | Frontend Interface | React/Lit, TypeScript | Real-time chat, geolocation, responsive UI |
+| **Agent API** | AI Orchestration | Node.js, LangChain.js | Natural language processing, tool orchestration |
+| **Burger MCP** | API Integration | Azure Functions | Standardized tool interface for external services |
+| **Burger API** | Business Logic | Node.js, Cosmos DB | Order management, user profiles, payment processing |
 
-1. **Fork & Clone**: Get the code to your local machine.
-2. **Install Dependencies**: `npm install`
-3. **Start Local Stack**: `npm start` (Runs all 4 services + database emulators)
-4. **Browse**: Open `http://localhost:4280`
+## Getting Started
 
-## Deploy to Azure
+### Prerequisites
+
+- Node.js 18+
+- Azure account
+- Uber Eats Developer Account
+- Azure CLI with `azure-dev` extension
+
+### Local Development
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/chicha-ai-burgers.git
+   cd chicha-ai-burgers
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your credentials
+   ```
+
+4. **Start development servers**
+   ```bash
+   npm run dev
+   ```
+
+## Deployment
+
+### Azure Deployment
 
 The entire stack is defined in Infrastructure-as-Code (Bicep) for one-click deployment.
 
 ```bash
+# Install Azure Developer CLI
 azd auth login
 azd up
 ```
 
 This will provision:
-- Azure OpenAI (or connect to existing)
-- Cosmos DB (Serverless)
+- Azure OpenAI Service
+- Azure Cosmos DB (Serverless)
 - Azure Functions (Flex Consumption)
-- Static Web Apps
+- Azure Static Web Apps
 - Application Insights
+
+### Environment Configuration
+
+Update the following environment variables in your Azure deployment:
+
+```bash
+# Required for Uber Eats Integration
+UBER_CLIENT_ID=your_client_id
+UBER_CLIENT_SECRET=your_client_secret
+UBER_REDIRECT_URI=your_redirect_uri
+
+# Required for Azure Services
+AZURE_OPENAI_API_KEY=your_openai_key
+COSMOS_CONNECTION_STRING=your_cosmos_connection_string
+```
+
+## Development Workflow
+
+### Code Structure
+
+```
+chicha-ai-burgers/
+├── packages/
+│   ├── agent-api/         # LangChain.js agent and API endpoints
+│   ├── agent-webapp/      # React frontend
+│   ├── burger-api/        # Core business logic and database
+│   └── burger-mcp/        # MCP tools and integrations
+├── infra/                 # Bicep templates
+└── docs/                  # Documentation
+```
+
+### Testing
+
+Run the test suite:
+
+```bash
+npm test
+```
+
+For end-to-end testing:
+
+```bash
+npm run test:e2e
+```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## Roadmap
+
+### Current Focus
+- [ ] Real-time order tracking with WebSockets
+- [ ] Multi-language support
+- [ ] Advanced dietary preference handling
+
+### Upcoming Features
+- [ ] Voice interface integration
+- [ ] Group ordering
+- [ ] AI-powered menu recommendations
 
 ## Resources
 
 - [Model Context Protocol](https://modelcontextprotocol.io/)
-- [LangChain.js](https://js.langchain.com)
-- [Uber Eats API Docs](https://developer.uber.com/docs/eats/introduction)
+- [LangChain.js Documentation](https://js.langchain.com)
+- [Uber Eats API Documentation](https://developer.uber.com/docs/eats/introduction)
+- [Azure Functions Documentation](https://docs.microsoft.com/azure/azure-functions/)
+- [Cosmos DB Documentation](https://docs.microsoft.com/azure/cosmos-db/)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For support, please [open an issue](https://github.com/yourusername/chicha-ai-burgers/issues) or reach out to our team at support@chicha.ai
