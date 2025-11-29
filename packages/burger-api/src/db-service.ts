@@ -474,7 +474,7 @@ export class DbService {
 
   async userExists(id: string): Promise<boolean> {
     if (!this.usersContainer) {
-       return true; 
+       return true;
     }
 
     try {
@@ -522,13 +522,13 @@ export class DbService {
         console.error(`Error updating token for user ${userId}:`, error);
     }
   }
-  
+
   async getUserToken(userId: string, provider: string): Promise<any> {
       if (!this.usersContainer) {
           const user = this.localUserTokens.get(userId);
           return user ? user[provider] : undefined;
       }
-      
+
       try {
           const { resource: user } = await this.usersContainer.item(userId, userId).read();
           return user ? user[provider] : undefined;
@@ -579,11 +579,11 @@ export class DbService {
 
   async depositFunds(userId: string, amount: number, type: 'crypto' | 'fiat'): Promise<UserWallet> {
       const wallet = await this.getUserWallet(userId);
-      
+
       if (type === 'crypto') {
           // Simulate conversion rate: 100 USD = 0.0015 BTC (roughly)
           // Just keeping simple float math for demo
-          wallet.cryptoBalance += amount; 
+          wallet.cryptoBalance += amount;
           // Auto-convert to fiat for settlement capability
           wallet.balance += amount * 60000; // Assuming amount is BTC
       } else {
@@ -614,13 +614,125 @@ export class DbService {
 
       // 5. Update Order Status
       await this.updateOrder(orderId, { paymentStatus: PaymentStatus.Paid });
-      
+
       return true;
   }
 
+  // Store configuration methods
+  async getStoreConfig(userId: string, provider: string, storeId: string): Promise<any> {
+    if (this.isCosmosDbInitialized && this.usersContainer) {
+      try {
+        const querySpec = {
+          query: 'SELECT c.stores FROM c WHERE c.id = @userId',
+          parameters: [
+            {
+              name: '@userId',
+              value: userId
+            }
+          ]
+        };
+
+        const { resources } = await this.usersContainer.items.query(querySpec).fetchAll();
+        if (resources.length === 0) return null;
+
+        const userData = resources[0];
+        return userData.stores?.[provider]?.[storeId] || null;
+      } catch (error) {
+        console.error('Error getting store config from Cosmos DB:', error);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async updateStoreConfig(userId: string, provider: string, storeId: string, config: any): Promise<void> {
+    if (this.isCosmosDbInitialized && this.usersContainer) {
+      try {
+        // First, get the user document
+        const { resource: user } = await this.usersContainer.item(userId, userId).read();
+
+        // Initialize stores object if it doesn't exist
+        const stores = user?.stores || {};
+        if (!stores[provider]) {
+          stores[provider] = {};
+        }
+
+        // Update the store config
+        stores[provider][storeId] = {
+          ...stores[provider][storeId],
+          ...config,
+          updatedAt: new Date().toISOString()
+        };
+
+        // Update the user document
+        await this.usersContainer.items.upsert({
+          id: userId,
+          ...user,
+          stores
+        });
+      } catch (error) {
+        console.error('Error updating store config in Cosmos DB:', error);
+        throw error;
+      }
+    }
+  }
+
+  async getUserStores(userId: string, provider: string): Promise<any[]> {
+    if (this.isCosmosDbInitialized && this.usersContainer) {
+      try {
+        const querySpec = {
+          query: 'SELECT c.stores FROM c WHERE c.id = @userId',
+          parameters: [
+            {
+              name: '@userId',
+              value: userId
+            }
+          ]
+        };
+
+        const { resources } = await this.usersContainer.items.query(querySpec).fetchAll();
+        if (resources.length === 0) return [];
+
+        const userData = resources[0];
+        return userData.stores?.[provider] ? Object.values(userData.stores[provider]) : [];
+      } catch (error) {
+        console.error('Error getting user stores from Cosmos DB:', error);
+        return [];
+      }
+    }
+    return [];
+  }
+
+  async deleteStoreConfig(userId: string, provider: string, storeId: string): Promise<boolean> {
+    if (this.isCosmosDbInitialized && this.usersContainer) {
+      try {
+        const { resource: user } = await this.usersContainer.item(userId, userId).read();
+        if (!user?.stores?.[provider]?.[storeId]) return false;
+
+        // Remove the store config
+        delete user.stores[provider][storeId];
+
+        // If no more stores for this provider, remove the provider entry
+        if (Object.keys(user.stores[provider]).length === 0) {
+          delete user.stores[provider];
+        }
+
+        // Update the user document
+        await this.usersContainer.items.upsert(user);
+        return true;
+      } catch (error) {
+        console.error('Error deleting store config from Cosmos DB:', error);
+        return false;
+      }
+    }
+    return false;
+  }
+
   // Initialize local data from JSON files
-  protected initializeLocalData(): void {
+  private initializeLocalData(): void {
+    // Initialize local data from JSON files
     this.localBurgers = burgersData as Burger[];
     this.localToppings = toppingsData as Topping[];
+    this.localOrders = [];
   }
 }

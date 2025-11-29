@@ -1,6 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
-import { UberClient, StoreActivationConfig, StoreConfig } from '../uber-client.js';
-import { DbService } from '../db-service.js';
+import { UberClient, StoreActivationConfig, WebhookConfig, StoreConfig } from '../uber-client';
+import { DbService } from '../db-service';
 
 const uberClient = new UberClient();
 
@@ -173,7 +173,13 @@ app.http('uber-activate-store', {
         const userId = request.query.get('userId');
 
         if (!userId || !storeId) {
-            return { status: 400, body: 'Missing userId or storeId' };
+            return {
+                status: 400,
+                jsonBody: {
+                    error: 'Missing required parameters',
+                    details: userId ? 'Missing storeId' : 'Missing userId'
+                }
+            };
         }
 
         try {
@@ -182,18 +188,55 @@ app.http('uber-activate-store', {
             const tokenData = await db.getUserToken(userId, 'uber');
 
             if (!tokenData?.access_token) {
-                return { status: 401, body: 'User not connected to Uber' };
+                return {
+                    status: 401,
+                    jsonBody: { error: 'User not connected to Uber' }
+                };
             }
 
-            const config = (await request.json()) as StoreActivationConfig;
+            // Parse and validate request body
+            let config: Omit<StoreActivationConfig, 'webhooks_config'> & {
+                webhooks_config?: Partial<WebhookConfig>;
+                integrator_store_id?: string;
+                merchant_store_id?: string;
+                is_order_manager?: boolean;
+                require_manual_acceptance?: boolean;
+            };
+
+            try {
+                config = await request.json() as any; // Type assertion needed due to Azure Functions type
+            } catch (e) {
+                return {
+                    status: 400,
+                    jsonBody: { error: 'Invalid JSON payload' }
+                };
+            }
+
+            // Add required fields if not provided
+            const payload = {
+                ...config,
+                integrator_store_id: config.integrator_store_id || userId,
+                merchant_store_id: config.merchant_store_id || `store-${Date.now()}`,
+                is_order_manager: config.is_order_manager ?? true,
+                require_manual_acceptance: config.require_manual_acceptance ?? false
+            };
 
             const result = await uberClient.activateStore(
                 tokenData.access_token,
                 storeId,
-                config
+                payload
             );
 
-            return { status: 200, jsonBody: result };
+            // Store the store configuration in the database
+            await db.updateStoreConfig(userId, 'uber', storeId, {
+                ...result,
+                activated_at: new Date().toISOString()
+            });
+
+            return {
+                status: 200,
+                jsonBody: result
+            };
         } catch (error) {
             context.error('Error activating store:', error);
             return {
@@ -209,27 +252,70 @@ app.http('uber-activate-store', {
 
 // 6. Update Store Configuration
 app.http('uber-update-store-config', {
-    methods: ['PUT'],
+    methods: ['PATCH'],
     authLevel: 'function',
     route: 'uber/stores/{storeId}/config',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const storeId = request.params.storeId;
+        const userId = request.query.get('userId');
 
-        if (!storeId) {
-            return { status: 400, body: 'Missing storeId' };
+        if (!storeId || !userId) {
+            return {
+                status: 400,
+                jsonBody: {
+                    error: 'Missing required parameters',
+                    details: !storeId ? 'Missing storeId' : 'Missing userId'
+                }
+            };
         }
 
         try {
-            const config = (await request.json()) as StoreConfig;
-            const result = await uberClient.updateStoreConfig(storeId, config);
+            // Parse request body
+            let config: Partial<StoreConfig>;
+            try {
+                config = await request.json() as Partial<StoreConfig>;
+            } catch (e) {
+                return {
+                    status: 400,
+                    jsonBody: { error: 'Invalid JSON payload' }
+                };
+            }
 
-            return { status: 200, jsonBody: result };
+            // Update the store configuration with proper type assertion
+            const result = await uberClient.updateStoreConfig(storeId, config as Partial<StoreConfig>);
+
+            // Update the store configuration in the database
+            const db = await DbService.getInstance();
+            await db.updateStoreConfig(userId, 'uber', storeId, {
+                ...result,
+                updated_at: new Date().toISOString()
+            });
+
+            return {
+                status: 200,
+                jsonBody: result
+            };
         } catch (error) {
             context.error('Error updating store config:', error);
+
+            // Handle specific error cases
+            let statusCode = 500;
+            let errorMessage = 'Failed to update store configuration';
+
+            if (error instanceof Error) {
+                if (error.message.includes('404')) {
+                    statusCode = 404;
+                    errorMessage = 'Store not found';
+                } else if (error.message.includes('401') || error.message.includes('403')) {
+                    statusCode = 403;
+                    errorMessage = 'Unauthorized to update store configuration';
+                }
+            }
+
             return {
-                status: 500,
+                status: statusCode,
                 jsonBody: {
-                    error: 'Failed to update store config',
+                    error: errorMessage,
                     details: error instanceof Error ? error.message : String(error)
                 }
             };
@@ -244,20 +330,60 @@ app.http('uber-get-store-config', {
     route: 'uber/stores/{storeId}/config',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const storeId = request.params.storeId;
+        const userId = request.query.get('userId');
 
-        if (!storeId) {
-            return { status: 400, body: 'Missing storeId' };
+        if (!storeId || !userId) {
+            return {
+                status: 400,
+                jsonBody: {
+                    error: 'Missing required parameters',
+                    details: !storeId ? 'Missing storeId' : 'Missing userId'
+                }
+            };
         }
 
         try {
+            // First try to get from database
+            const db = await DbService.getInstance();
+            const cachedConfig = await db.getStoreConfig(userId, 'uber', storeId);
+
+            if (cachedConfig) {
+                return {
+                    status: 200,
+                    jsonBody: cachedConfig
+                };
+            }
+
+            // If not in database, fetch from Uber API
             const config = await uberClient.getStoreConfig(storeId);
-            return { status: 200, jsonBody: config };
+
+            // Cache the configuration
+            await db.updateStoreConfig(userId, 'uber', storeId, config);
+
+            return {
+                status: 200,
+                jsonBody: config
+            };
         } catch (error) {
             context.error('Error getting store config:', error);
+
+            let statusCode = 500;
+            let errorMessage = 'Failed to get store configuration';
+
+            if (error instanceof Error) {
+                if (error.message.includes('404') || error.message.includes('not found')) {
+                    statusCode = 404;
+                    errorMessage = 'Store configuration not found';
+                } else if (error.message.includes('401') || error.message.includes('403')) {
+                    statusCode = 403;
+                    errorMessage = 'Unauthorized to access store configuration';
+                }
+            }
+
             return {
-                status: 500,
+                status: statusCode,
                 jsonBody: {
-                    error: 'Failed to get store config',
+                    error: errorMessage,
                     details: error instanceof Error ? error.message : String(error)
                 }
             };
@@ -265,7 +391,65 @@ app.http('uber-get-store-config', {
     }
 });
 
-// 8. Webhook Endpoint
+// 8. List User's Stores
+app.http('uber-list-stores', {
+    methods: ['GET'],
+    authLevel: 'function',
+    route: 'uber/stores',
+    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        const userId = request.query.get('userId');
+        const lat = parseFloat(request.query.get('lat') || '0');
+        const long = parseFloat(request.query.get('long') || '0');
+
+        if (!userId) {
+            return {
+                status: 400,
+                jsonBody: { error: 'Missing userId' }
+            };
+        }
+
+        try {
+            // First try to get from database
+            const db = await DbService.getInstance();
+            const userStores = await db.getUserStores(userId, 'uber');
+
+            if (userStores && userStores.length > 0) {
+                return {
+                    status: 200,
+                    jsonBody: { stores: userStores }
+                };
+            }
+
+            // If no stores in database, search nearby stores
+            const result = await uberClient.searchRestaurants(lat, long);
+            const stores = (result as any).stores || []; // Type assertion needed
+
+            // Cache the stores in database
+            for (const store of stores) {
+                await db.updateStoreConfig(userId, 'uber', store.id, {
+                    ...store,
+                    last_updated: new Date().toISOString()
+                });
+            }
+
+            return {
+                status: 200,
+                jsonBody: { stores }
+            };
+        } catch (error) {
+            context.error('Error listing stores:', error);
+            return {
+                status: 500,
+                jsonBody: {
+                    error: 'Failed to list stores',
+                    details: error instanceof Error ? error.message : String(error)
+                }
+            };
+        }
+    }
+});
+
+// 9. Webhook Endpoint
 app.http('uber-webhook', {
     methods: ['POST'],
     authLevel: 'anonymous',

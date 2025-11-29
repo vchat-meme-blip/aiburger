@@ -43,7 +43,12 @@ export interface StoreActivationConfig {
     allow_single_use_items_requests?: boolean;
     allow_special_instruction_requests?: boolean;
   };
-  webhooks_config?: WebhookConfig;
+  webhooks_config: {
+    order_release_webhooks: { is_enabled: boolean };
+    schedule_order_webhooks: { is_enabled: boolean };
+    delivery_status_webhooks: { is_enabled: boolean };
+    webhooks_version: string;
+  };
   timezone?: string;
   currency?: string;
 }
@@ -59,6 +64,11 @@ export interface StoreConfig extends StoreActivationConfig {
   integration_enabled: boolean;
   created_at?: string;
   updated_at?: string;
+  // Additional fields from Uber's API
+  status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  webhook_url?: string;
+  webhook_secret?: string;
+  last_sync_at?: string;
 }
 
 export class UberClient {
@@ -289,67 +299,160 @@ export class UberClient {
 
   /**
    * Activate a store using the user's token
+   * @param userToken User's OAuth token with eats.pos_provisioning scope
+   * @param storeId The Uber store ID to activate
+   * @param config Configuration for the store activation
    */
-  async activateStore(userToken: string, storeId: string, config: StoreActivationConfig) {
-      const url = `${this.apiUrl}/eats/stores/${storeId}/activate`;
-
-      // Ensure required fields are present
-      if (!config.integrator_brand_id || !config.integrator_store_id || !config.merchant_store_id) {
-          throw new Error('Missing required fields for store activation');
-      }
-
-      const payload: StoreActivationConfig = {
-          ...config,
-          // Set default webhook config if not provided
-          webhooks_config: config.webhooks_config || {
-              order_release_webhooks: { is_enabled: true },
-              schedule_order_webhooks: { is_enabled: true },
-              delivery_status_webhooks: { is_enabled: true },
-              webhooks_version: "1.0.0"
-          },
-          // Set default customer requests if not provided
-          allowed_customer_requests: {
-              allow_single_use_items_requests: false,
-              allow_special_instruction_requests: false,
-              ...config.allowed_customer_requests
-          }
-      };
-
-      console.log(`[UberClient] Activating store ${storeId}`);
-      return this.callApi<any>(userToken, 'POST', url, payload);
-  }
-
-  /**
-   * Update store configuration
-   */
-  async updateStoreConfig(storeId: string, config: StoreConfig): Promise<StoreConfig> {
+  async activateStore(userToken: string, storeId: string, config: Omit<StoreActivationConfig, 'webhooks_config'> & {
+    webhooks_config?: Partial<WebhookConfig>
+  }): Promise<StoreConfig> {
       if (!storeId) {
           throw new Error('Store ID is required');
       }
 
-      const token = await this.getClientCredentialsToken();
-      const url = `${this.apiUrl}/eats/stores/${storeId}/config`;
-
-      console.log(`[UberClient] Updating config for store ${storeId}`);
-      return this.callApi<StoreConfig>(token.access_token, 'PUT', url, {
-          ...config,
-          updated_at: new Date().toISOString()
+      // Validate required fields
+      const requiredFields = ['integrator_brand_id', 'integrator_store_id', 'merchant_store_id'];
+      const missingFields = requiredFields.filter(field => {
+          const key = field as keyof typeof config;
+          return !config[key];
       });
+
+      if (missingFields.length > 0) {
+          throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
+      // Build the complete payload with defaults
+      const payload: StoreActivationConfig = {
+          ...config,
+          // Set default webhook config
+          webhooks_config: {
+              order_release_webhooks: { is_enabled: true },
+              schedule_order_webhooks: { is_enabled: true },
+              delivery_status_webhooks: { is_enabled: true },
+              webhooks_version: '1.0.0',
+              ...(config.webhooks_config || {})
+          },
+          // Set default customer requests
+          allowed_customer_requests: {
+              allow_single_use_items_requests: false,
+              allow_special_instruction_requests: false,
+              ...(config.allowed_customer_requests || {})
+          },
+          // Set default values for optional fields
+          require_manual_acceptance: config.require_manual_acceptance ?? false,
+          is_order_manager: config.is_order_manager ?? true
+      };
+
+      console.log(`[UberClient] Activating store ${storeId} with config:`, JSON.stringify(payload, null, 2));
+
+      try {
+          const response = await this.callApi<StoreConfig>(
+              userToken,
+              'POST',
+              `/eats/stores/${storeId}/activate`,
+              payload
+          );
+
+          console.log(`[UberClient] Successfully activated store ${storeId}`);
+          return response;
+      } catch (error) {
+          console.error(`[UberClient] Error activating store ${storeId}:`, error);
+          throw new Error(`Failed to activate store: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+  }
+
+  /**
+   * Update store configuration
+   * @param storeId The Uber store ID to update
+   * @param config Configuration for the store update
+   * @returns Updated store configuration
+   */
+  async updateStoreConfig(storeId: string, config: Partial<StoreConfig>): Promise<StoreConfig> {
+      if (!storeId) {
+          throw new Error('Store ID is required');
+      }
+
+      // Validate required fields if this is a new configuration
+      if (config.integrator_brand_id === undefined ||
+          config.integrator_store_id === undefined ||
+          config.merchant_store_id === undefined) {
+          throw new Error('Missing required fields for store configuration');
+      }
+
+      // Get client credentials token for regular API operations
+      const token = await this.getClientCredentialsToken();
+
+      // Prepare the payload with only the fields that are allowed to be updated
+      const payload: Partial<StoreConfig> = {
+          ...config,
+          webhooks_config: config.webhooks_config ? {
+              order_release_webhooks: {
+                  is_enabled: config.webhooks_config.order_release_webhooks?.is_enabled ?? true
+              },
+              schedule_order_webhooks: {
+                  is_enabled: config.webhooks_config.schedule_order_webhooks?.is_enabled ?? true
+              },
+              delivery_status_webhooks: {
+                  is_enabled: config.webhooks_config.delivery_status_webhooks?.is_enabled ?? true
+              },
+              webhooks_version: config.webhooks_config.webhooks_version || '1.0.0'
+          } : undefined,
+          updated_at: new Date().toISOString()
+      };
+
+      console.log(`[UberClient] Updating config for store ${storeId}`, JSON.stringify(payload, null, 2));
+
+      try {
+          const response = await this.callApi<StoreConfig>(
+              token.access_token,
+              'PATCH',  // Using PATCH as per Uber's API specification
+              `/eats/stores/${storeId}/config`,
+              payload
+          );
+
+          console.log(`[UberClient] Successfully updated config for store ${storeId}`);
+          return response;
+      } catch (error) {
+          console.error(`[UberClient] Error updating store ${storeId} config:`, error);
+          throw new Error(`Failed to update store config: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
   }
 
   /**
    * Get store configuration
+   * @param storeId The Uber store ID to get configuration for
+   * @returns Store configuration
+   * @throws {Error} If storeId is missing or API request fails
    */
   async getStoreConfig(storeId: string): Promise<StoreConfig> {
       if (!storeId) {
           throw new Error('Store ID is required');
       }
 
-      const token = await this.getClientCredentialsToken();
-      const url = `${this.apiUrl}/eats/stores/${storeId}/config`;
+      try {
+          // Get client credentials token for regular API operations
+          const token = await this.getClientCredentialsToken();
 
-      console.log(`[UberClient] Getting config for store ${storeId}`);
-      return this.callApi<StoreConfig>(token.access_token, 'GET', url);
+          console.log(`[UberClient] Fetching config for store ${storeId}`);
+
+          const response = await this.callApi<StoreConfig>(
+              token.access_token,
+              'GET',
+              `/eats/stores/${storeId}/config`
+          );
+
+          console.log(`[UberClient] Successfully retrieved config for store ${storeId}`);
+          return response;
+      } catch (error) {
+          console.error(`[UberClient] Error getting config for store ${storeId}:`, error);
+
+          // Handle 404 specifically as store not found
+          if (error instanceof Error && error.message.includes('404')) {
+              throw new Error(`Store configuration not found for store ID: ${storeId}`);
+          }
+
+          throw new Error(`Failed to get store config: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
   }
 
   private getMockRestaurants(): UberSearchResponse {
