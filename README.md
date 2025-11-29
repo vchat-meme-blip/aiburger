@@ -169,6 +169,117 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## Real-Life Scenarios
+
+### 1. The Busy Professional's Lunch Order
+
+**Scenario**: Alex has back-to-back meetings but needs to schedule lunch.
+
+```mermaid
+sequenceDiagram
+    participant Alex
+    participant Chicha
+    participant Restaurant
+    participant Courier
+    
+    Alex->>Chicha: "Schedule a burger for lunch at 1pm"
+    Chicha->>Alex: "I found 3 burger places near your office. Which one would you like?"
+    Alex->>Chicha: "The closest one with the best rating"
+    Chicha->>Restaurant: Checks menu and operating hours
+    Chicha->>Alex: "Burger Palace has your favorite cheeseburger. Schedule for 1pm?"
+    Alex->>Chicha: "Yes, and add bacon and extra pickles"
+    Chicha->>Alex: "Got it! I'll place your order at 12:30pm for 1pm delivery. You'll be notified when it's on the way."
+    
+    Note over Chicha: At 12:30pm...
+    Chicha->>Restaurant: Places order
+    Restaurant-->>Chicha: Order confirmed for 1pm
+    
+    Note over Chicha: At 12:55pm...
+    Chicha->>Alex: "Your order is being prepared and will arrive at 1pm"
+    
+    Note over Chicha: At 12:58pm...
+    Chicha->>Alex: "Your order is out for delivery! Courier is 2 minutes away."
+    
+    Courier->>Alex: Arrives at door
+    Alex->>Courier: Receives order
+    Chicha->>Alex: "Enjoy your meal! Would you like to rate your experience?"
+```
+
+### 2. Group Order for Game Night
+
+**Scenario**: Jamie is hosting friends and needs to order for the group.
+
+```mermaid
+graph TD
+    A[Jamie starts group order] --> B[Shares link with friends]
+    B --> C[Friends add items to cart]
+    C --> D[Chicha suggests combos and deals]
+    D --> E[Group confirms order]
+    E --> F[Chicha tracks all items]
+    F --> G[Splits payment automatically]
+    G --> H[Live tracking for everyone]
+    H --> I[Notifications for each delivery milestone]
+```
+
+### 3. Late-Night Craving with Special Requests
+
+**Scenario**: Taylor gets hungry at midnight with specific dietary needs.
+
+1. **Initial Request**:
+   - Taylor: "I want a vegan burger with gluten-free bun, no onions, extra pickles"
+   - Chicha: "I found 2 places open now that can accommodate your request. Here are your options..."
+
+2. **Order Customization**:
+   - Chicha confirms each modification
+   - Suggests complementary items (vegan milkshake?)
+   - Provides ETA and tracks order in real-time
+
+3. **Delivery**:
+   - Sends "5 minutes away" notification
+   - Provides courier details and real-time location
+   - Confirms delivery completion
+
+### 4. Scheduled Weekly Meal Prep
+
+**Scenario**: Sam wants to schedule healthy meals for the workweek.
+
+```mermaid
+timeline
+    title Sam's Weekly Meal Schedule
+    section Monday
+        12:00 PM: Protein Bowl from Fresh & Co
+    section Wednesday
+        12:30 PM: Grilled Chicken Salad
+    section Friday
+        1:00 PM: Cheat Day Burger
+```
+
+**Features Demonstrated**:
+- Recurring orders
+- Meal planning
+- Dietary preference memory
+- Automatic payment
+- Delivery time optimization
+
+### 5. Corporate Catering Order
+
+**Scenario**: Preparing for a team of 20 with specific requirements.
+
+1. **Bulk Ordering**:
+   - Multiple meal options
+   - Individual packaging
+   - Special instructions per person
+
+2. **Logistics**:
+   - Scheduled delivery window
+   - Contactless delivery setup
+   - Expense reporting integration
+
+3. **Post-Order**:
+   - Digital receipts
+   - Team feedback collection
+   - Favorite orders saved for next time
+
 ## Roadmap
 
 ### Current Focus
