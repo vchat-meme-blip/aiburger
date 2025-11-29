@@ -244,15 +244,27 @@ graph TD
 **Scenario**: Sam wants to schedule healthy meals for the workweek.
 
 ```mermaid
-timeline
+gantt
     title Sam's Weekly Meal Schedule
+    dateFormat  HH:mm
+    axisFormat %I:%M %p
+    
     section Monday
-        12:00 PM: Protein Bowl from Fresh & Co
+    Protein Bowl from Fresh & Co :mon1, 12:00, 30m
+    
     section Wednesday
-        12:30 PM: Grilled Chicken Salad
+    Grilled Chicken Salad :wed1, 12:30, 30m
+    
     section Friday
-        1:00 PM: Cheat Day Burger
+    Cheat Day Burger :fri1, 13:00, 30m
 ```
+
+**Schedule Details**:
+| Day       | Time   | Meal                    | Restaurant     |
+|-----------|--------|-------------------------|----------------|
+| Monday    | 12:00 PM | Protein Bowl           | Fresh & Co     |
+| Wednesday | 12:30 PM | Grilled Chicken Salad | Healthy Eats   |
+| Friday    | 1:00 PM  | Cheat Day Burger       | Burger Palace  |
 
 **Features Demonstrated**:
 - Recurring orders
