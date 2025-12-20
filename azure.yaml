@@ -15,6 +15,14 @@ services:
     project: packages/burger-mcp
     language: ts
     host: function
+    hooks:
+      predeploy:
+        windows:
+          shell: pwsh
+          run: npm run build
+        posix:
+          shell: sh
+          run: npm run build
 
   burger-webapp:
     project: packages/burger-webapp

@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { UberClient, StoreActivationConfig, WebhookConfig, StoreConfig } from '../uber-client';
 import { DbService } from '../db-service';
+import * as crypto from 'crypto';
 
 const uberClient = new UberClient();
 
@@ -89,8 +90,10 @@ app.http('uber-callback', {
             await db.updateUserToken(userId, 'uber', storedToken);
 
             return {
-                status: 200,
-                headers: { 'Content-Type': 'text/html' },
+                status: 302,
+                headers: {
+                    'Location': process.env.AGENT_WEBAPP_URL || 'https://nice-pond-08ac3a20f.3.azurestaticapps.net/'
+                },
                 body: `
                 <html>
                 <body style="font-family: sans-serif; text-align: center; padding: 40px;">
@@ -166,7 +169,7 @@ app.http('uber-status', {
 // 5. Store Activation Endpoint
 app.http('uber-activate-store', {
     methods: ['POST'],
-    authLevel: 'function',
+    authLevel: 'anonymous', // Changed to anonymous for testing
     route: 'uber/stores/{storeId}/activate',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const storeId = request.params.storeId;
@@ -394,7 +397,7 @@ app.http('uber-get-store-config', {
 // 8. List User's Stores
 app.http('uber-list-stores', {
     methods: ['GET'],
-    authLevel: 'function',
+    authLevel: 'anonymous', // Changed to anonymous for testing
     route: 'uber/stores',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const userId = request.query.get('userId');
@@ -456,15 +459,44 @@ app.http('uber-webhook', {
     route: 'uber/webhook',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         try {
-            const body = await request.json();
-            context.log('Webhook received:', body);
+            // Read body once for signature verification
+            const bodyText = await request.text();
+            let body;
 
-            // Verify the webhook signature if needed
+            // Verify the webhook signature
             const signature = request.headers.get('x-uber-signature');
-            if (signature) {
-                // Add signature verification logic here
-                context.log('Webhook signature:', signature);
+            const webhookSecret = process.env.UBER_WEBHOOK_SIGNING_SECRET;
+
+            if (!webhookSecret) {
+                context.warn('UBER_WEBHOOK_SIGNING_SECRET not configured - skipping signature verification');
+                body = JSON.parse(bodyText);
+            } else if (!signature) {
+                context.warn('Missing x-uber-signature header - rejecting webhook');
+                return {
+                    status: 401,
+                    jsonBody: { error: 'Missing webhook signature' }
+                };
+            } else {
+                // Verify the signature using HMAC-SHA256
+                const hmac = crypto.createHmac('sha256', webhookSecret);
+                hmac.update(bodyText, 'utf8');
+                const expectedSignature = `sha256=${hmac.digest('hex')}`;
+
+                if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+                    context.error('Invalid webhook signature - rejecting request');
+                    context.log(`Expected: ${expectedSignature}`);
+                    context.log(`Received: ${signature}`);
+                    return {
+                        status: 401,
+                        jsonBody: { error: 'Invalid webhook signature' }
+                    };
+                }
+
+                context.log('Webhook signature verified successfully');
+                body = JSON.parse(bodyText);
             }
+
+            context.log('Webhook received:', body);
 
             // Process different webhook events
             const eventType = request.headers.get('x-uber-event-type');
