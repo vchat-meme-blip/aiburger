@@ -362,6 +362,34 @@ export class UberClient {
   }
 
   /**
+   * Get store menu from Uber API
+   * @param userToken User's OAuth token
+   * @param storeId The Uber store ID
+   * @returns Store menu data
+   */
+  async getStoreMenu(userToken: string, storeId: string): Promise<any> {
+      if (!storeId) {
+          throw new Error('Store ID is required');
+      }
+
+      console.log(`[UberClient] Getting menu for store ${storeId}`);
+
+      try {
+          const response = await this.callApi<any>(
+              userToken,
+              'GET',
+              `/eats/stores/${storeId}/menu`
+          );
+
+          console.log(`[UberClient] Successfully retrieved menu for store ${storeId}`);
+          return response;
+      } catch (error) {
+          console.error(`[UberClient] Error getting menu for store ${storeId}:`, error);
+          throw new Error(`Failed to get store menu: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+  }
+
+  /**
    * Update store configuration
    * @param storeId The Uber store ID to update
    * @param config Configuration for the store update

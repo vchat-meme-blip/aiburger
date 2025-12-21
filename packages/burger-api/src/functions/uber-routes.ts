@@ -3,6 +3,29 @@ import { UberClient, StoreActivationConfig, WebhookConfig, StoreConfig } from '.
 import { DbService } from '../db-service';
 import * as crypto from 'crypto';
 
+// Helper function to calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Radius of Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// City coordinates mapping for better location detection
+const CITY_COORDINATES: Record<string, { lat: number; long: number }> = {
+    'paris': { lat: 48.8566, long: 2.3522 },
+    'london': { lat: 51.5074, long: -0.1278 },
+    'new york': { lat: 40.7128, long: -74.0060 },
+    'kansas city': { lat: 39.0997, long: -94.5786 },
+    'johannesburg': { lat: -26.2041, long: 28.0473 },
+    'roodepoort': { lat: -26.1582, long: 27.8813 }
+};
+
 const uberClient = new UberClient();
 
 // 1. Login Endpoint: Redirects user to Uber via an interstitial page
@@ -253,7 +276,142 @@ app.http('uber-activate-store', {
     }
 });
 
-// 6. Update Store Configuration
+// 6. Get Store Menu
+app.http('uber-get-store-menu', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    route: 'uber/stores/{storeId}/menu',
+    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        const storeId = request.params.storeId;
+        const userId = request.query.get('userId');
+
+        if (!storeId || !userId) {
+            return {
+                status: 400,
+                jsonBody: {
+                    error: 'Missing required parameters',
+                    details: !storeId ? 'Missing storeId' : 'Missing userId'
+                }
+            };
+        }
+
+        try {
+            // Get user token for authenticated requests
+            const db = await DbService.getInstance();
+            const tokenData = await db.getUserToken(userId, 'uber');
+
+            if (!tokenData?.access_token) {
+                return {
+                    status: 401,
+                    jsonBody: { error: 'User not connected to Uber' }
+                };
+            }
+
+            // Get store menu from Uber API
+            const menu = await uberClient.getStoreMenu(tokenData.access_token, storeId);
+
+            return {
+                status: 200,
+                jsonBody: {
+                    storeId,
+                    menu: menu,
+                    retrieved_at: new Date().toISOString()
+                }
+            };
+        } catch (error: any) {
+            context.log(`Error getting store menu: ${error.message}`);
+            return {
+                status: 500,
+                jsonBody: {
+                    error: 'Failed to retrieve store menu',
+                    details: error.message
+                }
+            };
+        }
+    }
+});
+
+// 7. Get Store Details
+app.http('uber-get-store-details', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    route: 'uber/stores/{storeId}/details',
+    handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        const storeId = request.params.storeId;
+        const userId = request.query.get('userId');
+
+        if (!storeId || !userId) {
+            return {
+                status: 400,
+                jsonBody: {
+                    error: 'Missing required parameters',
+                    details: !storeId ? 'Missing storeId' : 'Missing userId'
+                }
+            };
+        }
+
+        try {
+            // Get user stores from database first
+            const db = await DbService.getInstance();
+            const userStores = await db.getUserStores(userId, 'uber');
+
+            if (userStores && userStores.length > 0) {
+                // Find the specific store
+                const store = userStores.find((s: any) => s.store_id === storeId);
+
+                if (store) {
+                    return {
+                        status: 200,
+                        jsonBody: {
+                            storeId: store.store_id,
+                            name: store.name,
+                            location: store.location,
+                            status: store.status,
+                            avg_prep_time: store.avg_prep_time,
+                            timezone: store.timezone,
+                            web_url: store.web_url,
+                            raw_hero_url: store.raw_hero_url,
+                            price_bucket: store.price_bucket,
+                            contact_emails: store.contact_emails,
+                            pos_data: store.pos_data,
+                            retrieved_at: new Date().toISOString()
+                        }
+                    };
+                }
+            }
+
+            // If not found in database, try to get from Uber API
+            const tokenData = await db.getUserToken(userId, 'uber');
+
+            if (!tokenData?.access_token) {
+                return {
+                    status: 401,
+                    jsonBody: { error: 'User not connected to Uber' }
+                };
+            }
+
+            // Get store details from Uber API (this would need to be implemented in UberClient)
+            return {
+                status: 501,
+                jsonBody: {
+                    error: 'Store details not found in local cache',
+                    details: 'Store not found in user\'s store list'
+                }
+            };
+        } catch (error: any) {
+            context.log(`Error getting store details: ${error.message}`);
+            return {
+                status: 500,
+                jsonBody: {
+                    error: 'Failed to retrieve store details',
+                    details: error.message
+                }
+            };
+        }
+    }
+});
+
+// 8. Update Store Configuration
 app.http('uber-update-store-config', {
     methods: ['PATCH'],
     authLevel: 'function',
@@ -401,8 +559,16 @@ app.http('uber-list-stores', {
     route: 'uber/stores',
     handler: async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
         const userId = request.query.get('userId');
-        const lat = parseFloat(request.query.get('lat') || '0');
-        const long = parseFloat(request.query.get('long') || '0');
+        let lat = parseFloat(request.query.get('lat') || '0');
+        let long = parseFloat(request.query.get('long') || '0');
+        const locationQuery = request.query.get('location')?.toLowerCase();
+
+        // If no coordinates but location query provided, try to match city
+        if (lat === 0 && long === 0 && locationQuery && CITY_COORDINATES[locationQuery]) {
+            lat = CITY_COORDINATES[locationQuery].lat;
+            long = CITY_COORDINATES[locationQuery].long;
+            context.log(`[Uber] Detected location: ${locationQuery}, using coordinates: ${lat}, ${long}`);
+        }
 
         if (!userId) {
             return {
@@ -425,7 +591,29 @@ app.http('uber-list-stores', {
 
             // If no stores in database, search nearby stores
             const result = await uberClient.searchRestaurants(lat, long);
-            const stores = (result as any).stores || []; // Type assertion needed
+            let stores = (result as any).stores || []; // Type assertion needed
+
+            // Filter stores by distance if coordinates provided
+            if (lat !== 0 && long !== 0) {
+                stores = stores.filter((store: any) => {
+                    if (!store.location || !store.location.latitude || !store.location.longitude) {
+                        return true; // Keep stores without location data
+                    }
+
+                    const distance = calculateDistance(
+                        lat, long,
+                        store.location.latitude, store.location.longitude
+                    );
+
+                    // Keep stores within 50km
+                    return distance <= 50;
+                }).map((store: any) => ({
+                    ...store,
+                    distance_km: store.location && store.location.latitude && store.location.longitude
+                        ? calculateDistance(lat, long, store.location.latitude, store.location.longitude)
+                        : null
+                }));
+            }
 
             // Cache the stores in database
             for (const store of stores) {

@@ -124,24 +124,24 @@ export const tools = [
       try {
          const resultJson = await fetchBurgerApi(`/api/uber/nearby?userId=${args.userId}&lat=${args.lat}&long=${args.long}`);
          const results = JSON.parse(resultJson);
-         
+
          if (results.stores && results.stores.length > 0) {
              // Generate a rich HTML grid for the frontend
              let html = `<div class="restaurant-grid">`;
              for (const store of results.stores) {
                  html += `
                  <div class="restaurant-card">
-                     <div class="card-image" style="background-image: url('${store.image_url}')">
+                     <div class="card-image" style="background-image: url('${store.raw_hero_url}')">
                         ${store.promo ? `<span class="promo-badge">${store.promo}</span>` : ''}
                      </div>
                      <div class="card-details">
                          <h4>${store.name}</h4>
                          <div class="meta">
                             <span class="rating">⭐ ${store.rating}</span>
-                            <span class="eta">🕒 ${store.eta} min</span>
+                            <span class="eta">🕒 ${store.avg_prep_time} min</span>
                          </div>
                          <div class="fee">Delivery: ${store.delivery_fee}</div>
-                         <a href="${store.url}" target="_blank" class="order-btn">Order on Uber Eats</a>
+                         <a href="${store.web_url}" target="_blank" class="order-btn">Order on Uber Eats</a>
                      </div>
                  </div>`;
              }
@@ -189,6 +189,28 @@ export const tools = [
       }
   },
   {
+      name: 'get_store_menu',
+      description: 'Get the menu for a specific Uber Eats store (requires storeId and userId)',
+      schema: z.object({
+          storeId: z.string().describe('ID of the Uber store'),
+          userId: z.string().describe('ID of the user requesting the menu'),
+      }),
+      async handler(args: { storeId: string; userId: string }) {
+          return fetchBurgerApi(`/api/uber/stores/${args.storeId}/menu?userId=${args.userId}`);
+      }
+  },
+  {
+      name: 'get_store_details',
+      description: 'Get detailed information for a specific Uber Eats store (requires storeId and userId)',
+      schema: z.object({
+          storeId: z.string().describe('ID of the Uber store'),
+          userId: z.string().describe('ID of the user requesting store details'),
+      }),
+      async handler(args: { storeId: string; userId: string }) {
+          return fetchBurgerApi(`/api/uber/stores/${args.storeId}/details?userId=${args.userId}`);
+      }
+  },
+  {
       name: 'find_food_deals',
       description: 'Search for food deals and specific items using semantic search. Use this when users ask for "spicy", "cheap", "vegan", etc.',
       schema: z.object({
@@ -206,7 +228,7 @@ export const tools = [
           try {
               const resultJson = await fetchBurgerApi(`/api/discovery/search?${params.toString()}`);
               const data = JSON.parse(resultJson);
-              
+
               if (!data.results || data.results.length === 0) {
                   return "No specific deals found fitting that description.";
               }
@@ -227,7 +249,7 @@ export const tools = [
                               <span class="rating"><strong>$${item.price}</strong></span>
                            </div>
                            <p style="font-size: 0.85rem; color: #666; margin-bottom: 10px;">${item.description}</p>
-                           ${item.type === 'internal' 
+                           ${item.type === 'internal'
                                ? `<button onclick="alert('Ask Chicha to order this ID: ${item.id}')" class="order-btn">Select Item</button>`
                                : `<a href="${item.url}" target="_blank" class="order-btn">View on Uber Eats</a>`
                            }
@@ -257,11 +279,11 @@ async function fetchBurgerApi(url: string, options: RequestInit = {}): Promise<s
         Accept: 'application/json',
       },
     });
-    
+
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`[MCP] API Error (${response.status}):`, errorBody);
-      
+
       try {
          const jsonError = JSON.parse(errorBody);
          throw new Error(jsonError.error || jsonError.message || response.statusText);
